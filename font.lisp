@@ -29,7 +29,7 @@
 (defun read-bdf-line (line)
   (let* ((tline (string-trim '(#\Space #\Tab #\Newline) line))
          (whitespace (search '(#\Space) tline)))
-    (if whitespace
+    (when whitespace
         (let* ((lhs (subseq tline 0 whitespace))
                (rhs (subseq tline (+ 1 whitespace) (length tline)))
                (sym (intern lhs "KEYWORD")))
@@ -58,7 +58,7 @@
                     )))
           (()))))
 
-#+nil (defun bdf-list-to-treeq (all-lines)
+#+nil (defun bdf-list-to-tree (all-lines)
   (let ((result (list)))
     (loop for line in all-lines do
       (let ((key (second result)))
@@ -94,19 +94,7 @@
                     (setf bitmap-index 0))))
             ((and (typep line 'number))
              (setf (aref result cur-char) (replace-bitvec (aref result cur-char) line bitmap-index))
-             (incf bitmap-index 8)
-
-             (print "cur char")
-             (print cur-char)
-             ;; (if (> line 0)
-             ;;     (progn
-             ;;       (print "line ")
-             ;;       (print line)
-             ;;       (print "vec ")
-             ;;       (print (aref result cur-char))
-             ;;       (print "bitmap index ")
-             ;;       (print bitmap-index)))
-             )
+             (incf bitmap-index 8))
             ))
     (values result num-chars cur-char)))
 
@@ -119,9 +107,12 @@
               while l do (setf all-lines (append all-lines (list (read-bdf-line l)))))
         all-lines))))
 
-(defvar fl (read-bdf-file-into-list "./Bauhaus.bdf"))
-(setf fl (read-bdf-file-into-list "./Bauhaus.bdf"))
+;; (defvar fl (read-bdf-file-into-list "./Bauhaus.bdf"))
+;; (setf fl (read-bdf-file-into-list "./Bauhaus.bdf"))
 
+(defun read-bdf-file-into-bit-array (filename)
+  "Extremely naive parser to convert BDF file specified by FILENAME into an array of bit vectors"
+  (bdf-list-to-bit-array (read-bdf-file-into-list filename)))
 
 #+nil (defun collect-lines (line globalprops chars context)
   (let ((parsed (read-bdf-line line)))

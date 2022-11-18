@@ -1,30 +1,37 @@
+;; Normally the init files loads this
+;; (load "~/quicklisp/setup.lisp")
+
 (ql:quickload "sdl2")
-(ql:quickload :sdl2/examples)
-
-(ql:system-apropos "midi")
+;; (ql:system-apropos "midi")
 ;; (ql:quickload "portmidi")
-
-;; We should be able to run examples as normal on CCL
-#-sbcl (sdl2-examples:basic-test)
-
-#+czl (+ 1 256)
 
 (defconstant +SCREEN-WIDTH+ 320)
 (defconstant +SCREEN-HEIGHT+ 240)
 
-(defvar *bitmap-font* (bdf-list-to-bit-array (read-bdf-file-into-list "./Bauhaus.bdf")))
+(defvar *bitmap-font* (read-bdf-file-into-bit-array "./Bauhaus.bdf"))
+(defconstant +CHAR_WIDTH+ 8)
+(defconstant +CHAR_HEIGHT+ 8)
 
 (defun draw-character (renderer posx posy charnum)
   ;; TODO assert charnum is in range
   ;; TODO replace charnum with character?
   (let ((bits (aref *bitmap-font* charnum)))
-    (loop for i from 0 to 63
-          do (let* ((y (floor i 8))
-                    (x (- i (* 8 y))))
+    (loop for i from 0 to (- (* +CHAR_WIDTH+ +CHAR_HEIGHT+) 1)
+          do (let* ((y (floor i +CHAR_WIDTH+))
+                    (x (- i (* +CHAR_WIDTH+ y))))
                (if (= 1 (aref bits i))
                    (sdl2:render-draw-point renderer (+ posx x) (+ posy  y)))
-               )))
-  )
+               ))))
+
+(defun charcode-from-string (str i)
+  (char-code (schar str i)))
+;; (charcode-from-string "ab" 1)
+
+(defun draw-string (renderer posx posy s)
+  ;; TODO assert enough screen space?
+  (loop for i from 0 to (- (length s) 1)
+        do (draw-character renderer (+ posx (* i +CHAR_WIDTH+)) posy (charcode-from-string s i))))
+
 
 (defun init-display ()
   (sdl2:with-init (:everything)
@@ -51,23 +58,24 @@
                       (x (- c (* 40 y))))
                  (print (list  x y c))
                  (draw-character renderer (* x 8) (* y 8) c)))
+      ;; (draw-string renderer 200 200 "Hello World!")
       (sdl2:render-present renderer)
 
       ;; start event loop
-      (sdl2:with-event-loop (:method :poll)
-        ;; ESC will exit
-        (:keyup (:keysym keysym)
-                (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-escape)
-                  (sdl2:push-event :quit)))
-        ;; re-renders / blit texture goes here
-        ;;         (:idle ()
-        ;;                )
-        (:quit () t))
-      )))
+)
+    (sdl2:with-event-loop (:method :poll)
+      ;; ESC will exit
+      (:keyup (:keysym keysym)
+              (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-escape)
+                (sdl2:push-event :quit)))
+      ;; re-renders / blit texture goes here
+      ;;         (:idle ()
+      ;;                )
+      (:quit () t))
+      ))
 
 (defun launch ()
   "Open our first window and draw some pixels"
   (init-display))
 
-(trace init-display)
 (launch)
