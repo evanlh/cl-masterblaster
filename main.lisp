@@ -1,6 +1,5 @@
 ;; Normally the init files loads this
 ;; (load "~/quicklisp/setup.lisp")
-
 (ql:quickload "sdl2")
 ;; (ql:system-apropos "midi")
 ;; (ql:quickload "portmidi")
@@ -9,6 +8,7 @@
 (defconstant +SCREEN-HEIGHT+ 240)
 
 (defvar *bitmap-font* (read-bdf-file-into-bit-array "./Bauhaus.bdf"))
+(setf *bitmap-font* (read-bdf-file-into-bit-array "./Bauhaus.bdf"))
 (defconstant +CHAR_WIDTH+ 8)
 (defconstant +CHAR_HEIGHT+ 8)
 
@@ -58,7 +58,7 @@
                       (x (- c (* 40 y))))
                  (print (list  x y c))
                  (draw-character renderer (* x 8) (* y 8) c)))
-      ;; (draw-string renderer 200 200 "Hello World!")
+      (draw-string renderer 200 200 "Hello World!")
       (sdl2:render-present renderer)
 
       ;; start event loop
