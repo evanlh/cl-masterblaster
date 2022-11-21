@@ -29,7 +29,7 @@
 (defun read-bdf-line (line)
   (let* ((tline (string-trim '(#\Space #\Tab #\Newline) line))
          (whitespace (search '(#\Space) tline)))
-    (when whitespace
+    (if whitespace
         (let* ((lhs (subseq tline 0 whitespace))
                (rhs (subseq tline (+ 1 whitespace) (length tline)))
                (sym (intern lhs "KEYWORD")))
@@ -94,8 +94,7 @@
                     (setf bitmap-index 0))))
             ((and (typep line 'number))
              (setf (aref result cur-char) (replace-bitvec (aref result cur-char) line bitmap-index))
-             (incf bitmap-index 8))
-            ))
+             (incf bitmap-index 8))))
     (values result num-chars cur-char)))
 
 
@@ -107,7 +106,7 @@
               while l do (setf all-lines (append all-lines (list (read-bdf-line l)))))
         all-lines))))
 
-;; (defvar fl (read-bdf-file-into-list "./Bauhaus.bdf"))
+(defvar fl (read-bdf-file-into-list "./Bauhaus.bdf"))
 ;; (setf fl (read-bdf-file-into-list "./Bauhaus.bdf"))
 
 (defun read-bdf-file-into-bit-array (filename)
