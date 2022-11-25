@@ -1,14 +1,10 @@
-;; Normally the init files loads this
-;; (load "~/quicklisp/setup.lisp")
 (ql:quickload "sdl2")
-;; (ql:system-apropos "midi")
-;; (ql:quickload "portmidi")
+(load "./font.lisp")
 
 (defconstant +SCREEN-WIDTH+ 320)
 (defconstant +SCREEN-HEIGHT+ 240)
 
-(defvar *bitmap-font* (read-bdf-file-into-bit-array "./Bauhaus.bdf"))
-(setf *bitmap-font* (read-bdf-file-into-bit-array "./Bauhaus.bdf"))
+(defparameter *bitmap-font* (gethash :CHARBITS (load-bdf-file "./Area51.bdf")))
 (defconstant +CHAR_WIDTH+ 8)
 (defconstant +CHAR_HEIGHT+ 8)
 

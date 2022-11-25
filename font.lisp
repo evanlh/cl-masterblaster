@@ -16,7 +16,8 @@
                     #*1111))
 
 (defun replace-bitvec (bitvec num pos)
-  ;; TODO assert int is 8 bits or less
+  (unless (<= num 255)
+    (error "Number must be <= 8 bits wide"))
   (let* ((up (ash num -4))
          (lo (- num (ash up 4))))
     (replace bitvec (aref *bit-map* up) :start1 pos :start2 0)
@@ -25,6 +26,17 @@
 ;; (defvar b (make-array (* 8 8) :element-type 'bit))
 ;; (replace-bitvec b 0 0)
 ;; (replace-bitvec b #xff 8)
+;; (replace-bitvec b 256 0) ;; errors
+
+(defun make-bitvec-from-bitlist (bitlist)
+  (let* ((numlist (mapcar (lambda (x) (read-from-string (concatenate 'string "#X" x))) bitlist))
+         (bitvec (make-array (* 8 (length numlist)) :element-type 'bit)))
+    (dotimes (i (length numlist))
+      (replace-bitvec bitvec (nth i numlist) (* 8 i)))
+    bitvec))
+
+;; (make-bitvec-from-bitlist '("ff" "00" "00" "00" "00" "00" "f0" "ff")) ;; => #*1111111100000000000000000000000000000000000000001111000011111111
+;; (make-bitvec-from-bitlist '("ff" "00" "ff" "00")) ;; => #*11111111000000001111111100000000
 
 (defun read-bdf-line (line)
   (let* ((tline (string-trim '(#\Space #\Tab #\Newline) line))
@@ -43,185 +55,148 @@
 ;; (read-bdf-line "BITMAP ")
 ;; (read-bdf-line "0f")
 
-#+nil (defun add-line (all-lines next-line)
-  (let ((last-pair] (last all-lines 2))) ;; last is inefficient but not sure it matters here
-    (cond ((= (length last-pair) 0) (append all-lines next-line))
-          ((and (= (length last-pair) 2) (= (length next-line) 2))
-           (cond ((eq (first next-line) :STARTCHAR)
-                  (append all-lines next-line (list :CHAR_LIST (list))))
-                 ((eq (first next-line) :BITMAP)
-                  (append all-lines ))
-                 (t (if (typep (second last-pair) 'list)
-                        ;; append to last inner list
-                        ;; append to end
-                        (append all-lines next-line))
-                    )))
-          (()))))
-
-#+nil (defun bdf-list-to-tree (all-lines)
-  (let ((result (list)))
-    (loop for line in all-lines do
-      (let ((key (second result)))
-        (cond ((eq nil key)
-               (push (car line) result)
-               (push (second line) result))
-              ((and (eq key :CHAR_LIST) (typep line 'list))
-               (push (car line) (car result))
-               (push (second line) (car result)))
-              ((typep line 'list)
-               (print line)
-               (cond ((eq (car line) :STARTCHAR)
-                      (push (car line) result)
-                      (push (second line) result)
-                      (push :CHAR_LIST result)
-                      (push '() result))
-                     )))))
-    (nreverse result)))
-
-(defun bdf-list-to-bit-array (all-lines)
-  (let ((result nil)
-        (num-chars 0)
-        (cur-char 0)
-        (bitmap-index 0))
-    (loop for line in all-lines do
-      (cond ((typep line 'list)
-             (cond ((eq (car line) :CHARS)
-                    (setf num-chars (read-from-string (second line)))
-                    (setf result (make-array num-chars :element-type 'array)))
-                   ((eq (car line) :STARTCHAR)
-                    (setf cur-char (read-from-string (concatenate 'string "#X" (subseq (second line) 1))))
-                    (setf (aref result cur-char) (make-array (* 8 8) :element-type 'bit))
-                    (setf bitmap-index 0))))
-            ((and (typep line 'number))
-             (setf (aref result cur-char) (replace-bitvec (aref result cur-char) line bitmap-index))
-             (incf bitmap-index 8))))
-    (values result num-chars cur-char)))
+;; DEPRECATED ********************************
+;; (defun bdf-list-to-bit-array (all-lines)
+;;   (let ((result nil)
+;;         (num-chars 0)
+;;         (cur-char 0)
+;;         (bitmap-index 0))
+;;     (loop for line in all-lines do
+;;       (cond ((typep line 'list)
+;;              (cond ((eq (car line) :CHARS)
+;;                     (setf num-chars (read-from-string (second line)))
+;;                     (setf result (make-array num-chars :element-type 'array)))
+;;                    ((eq (car line) :STARTCHAR)
+;;                     (setf cur-char (read-from-string (concatenate 'string "#X" (subseq (second line) 1))))
+;;                     (setf (aref result cur-char) (make-array (* 8 8) :element-type 'bit))
+;;                     (setf bitmap-index 0))))
+;;             ((and (typep line 'number))
+;;              (setf (aref result cur-char) (replace-bitvec (aref result cur-char) line bitmap-index))
+;;              (incf bitmap-index 8))))
+;;     (values result num-chars cur-char)))
 
 
-(defun read-bdf-file-into-list (filename)
-  (with-open-file (in filename)
-    (with-standard-io-syntax
-      (let ((all-lines (list)))
-        (loop for l = (read-line in nil nil)
-              while l do (setf all-lines (append all-lines (list (read-bdf-line l)))))
-        all-lines))))
+;; (defun read-bdf-file-into-list (filename)
+;;   (with-open-file (in filename)
+;;     (with-standard-io-syntax
+;;       (let ((all-lines (list)))
+;;         (loop for l = (read-line in nil nil)
+;;               while l do (setf all-lines (append all-lines (list (read-bdf-line l)))))
+;;         all-lines))))
 
-(defvar fl (read-bdf-file-into-list "./Bauhaus.bdf"))
+;; (defvar fl (read-bdf-file-into-list "./Bauhaus.bdf"))
 ;; (setf fl (read-bdf-file-into-list "./Bauhaus.bdf"))
 
-(defun read-bdf-file-into-bit-array (filename)
-  "Extremely naive parser to convert BDF file specified by FILENAME into an array of bit vectors"
-  (bdf-list-to-bit-array (read-bdf-file-into-list filename)))
-
-#+nil (defun collect-lines (line globalprops chars context)
-  (let ((parsed (read-bdf-line line)))
-    (cond ((typep parsed 'keyword)
-           (cond ((eq parsed :BITMAP) (list globalprops chars :BITMAP))
-                 ((eq parsed :ENDCHAR) (list globalprops chars nil))
-                 (t (list globalprops chars context))))
-          ((typep parsed 'list)
-           (cond ((eq (first parsed) :STARTFONT) (list globalprops chars :STARTFONT))
-                 ((eq (first parsed) :STARTCHAR)
-                  (setf chars (cons (make-hash-table) chars))
-                  (print (second parsed))
-                  (list globalprops chars :STARTCHAR))
-                 (t (cond ((eq context :STARTFONT)
-                           (setf (gethash (first parsed) globalprops) (second prsed))
-                           (list globalprops chars :STARTFONT))
-                          ((eq context :STARTCHAR)
-                           (setf (gethash (first parsed) (car chars)) (second parsed))
-                           (list globalprops chars :STARTCHAR))
-                          ;; TODO throw an error here?
-                          (t (print "got a list outside of STARTFONT/STARTCHAR"))
-                          ))))
-          ((and (typep parsed 'number) (eq context :BITMAP))
-           ;; initialize BITMAP value to an 8x8 bit array & 0 the index
-           (if (not (gethash :BITMAP (car chars)))
-               (progn
-                 (setf (gethash :BITMAP (car chars)) (make-array (* 8 8) :element-type 'bit))
-                 (setf (gethash :BITMAPINDEX (car chars)) 0)
-
-                 ))
-           ;; copy the integer value as bits into the array
-           (replace-bitvec (gethash :BITMAP (car chars)) parsed (gethash :BITMAPINDEX (car chars)))
-           ;; increment the index
-           (incf (gethash :BITMAPINDEX (car chars)))
-           ;; (print "incd hash")
-           ;; (print (gethash :BITMAPINDEX (car chars) 0))
-           ;; (setf (gethash :BITMAP (car chars)) (append (or (gethash :BITMAP (car chars)) (list)) parsed))
-           (list globalprops chars context))
-          (t (print "Unknown type, aborting")))))
-
-;; loop over all lines of input
-;; when you're between the string matching STARTFONT and CHARS ("global properties") collect all properties into a plist (converting the LHS string to a keyword)
-;; when you're between STARTCHAR and ENDCHAR collect all props into a per char plist
-;; when you're between BITMAP and ENDCHAR read the numbers as hex and store them in an array at the position of the character indicated by STARTCHAR
-
-#+nil (defun collect (line output)
-  (print "collect")
-  (print line)
-  (print output)
-  (let* ((g (or (and output (first output)) globalprops))
-         (c (or (and output (nth 1 output)) chars))
-         (context (and output (nth 2 output)))
-         (output (collect-lines line g c context)))
-    output))
-
-#+nil (defun load-font (filename)
-  (let* ((globalprops (make-hash-table))
-         (chars (list))
-         )
-    (with-open-file (in filename)
-      (with-standard-io-syntax
-        (loop
-          for l = (read-line in nil nil)
-          for out = (funcall collect l out)
-;;            then (collect-lines (read-line in nil nil) (first l) (nth 1 l) (nth 2 l))
-          while l do (let ((*print-readably* nil))
-                       (print out)
-                       (print (nth 1 out))
-                       )
-          (return out))))))
+;; (defun read-bdf-file-into-bit-array (filename)
+;;   "Extremely naive parser to convert BDF file specified by FILENAME into an array of bit vectors"
+;;   (bdf-list-to-bit-array (read-bdf-file-into-list filename)))
+;; END DEPRECATION
 
 
+;; TODO move these two into string utils
+;; find index of str in buffer
+(defun find-position (buffer str)
+  (position-if (lambda (s) (search str s)) buffer))
 
-;; (defun load-font (filename)
-;;   (let ((globalprops (make-hash-table))
-;;         (chars (list)))
-;;     (print globalprops)
-;;     (print chars)
+(defun split-on-space (str)
+  (loop for i = 0 then (1+ j)
+        as j = (position #\Space str :start i) ;; only works for non-repeats
+        collect (subseq str i j)
+        while j))
 
-;;     (with-open-file (in filename)
-;;       (with-standard-io-syntax
-;;         (loop
-;;           for l = (collect-lines (read-line in nil nil) globalprops chars nil)
-;;             then (collect-lines (read-line in nil nil) (first l) (nth 1 l) (nth 2 l))
-;;           while l do (let ((*print-readably* nil))
-;;                        ;; (print (nth 1 l))
-;;                        )
-;;           )))
-;;     (print globalprops)
-;;     (print chars)
-;;     (list globalprops chars)))
+;; (split-on-space "THIS IS A TEST") ;; => ("THIS" "IS" "A" "TEST")
+
+;; parse a single line: 1) split along spaces. 2) first element is always the prop name,
+;; rest of elements are numbers or strings, unless only element is 2 digit hex number.
+(defun parse-bdf-line (l)
+  (let ((first-item (first l)))
+    (cond ((> (length first-item) 2)
+           (cons (intern first-item "KEYWORD") (mapcar #'read-from-string (rest l))))
+          (t (list (read-from-string (concatenate 'string "#X" first-item)))))))
+
+(defun linelist-to-bdf-list (raw-line-list)
+  ;; TODO function composition
+  (mapcar 'parse-bdf-line (mapcar #'split-on-space raw-line-list)))
+
+;; (linelist-to-bdf-list '("STARTFONT 2.1" "FONT Bauhaus" "SIZE 8 75 75")) ;; => ((:STARTFONT 2.1) (:FONT BAUHAUS) (:SIZE 8 75 75))
+
+;; turn the nested sortof-plists into a hash table, first element as key, remaining as val
+(defun bdf-list-to-hash (bdf-list)
+  (reduce (lambda (h l)
+            (setf (gethash (first l) h) (if (> (length l) 2) (rest l) (second l))) h)
+          bdf-list :initial-value (make-hash-table)))
 
 
-;; Substring compare, more or less
-;; (string-equal "te" "test" :end1 2 :end2 2)
+(defun body-list-to-char-list (body-list numchars character-props character-bits)
+  ;; a copy of the body list, already split to start at STARTCHAR
+  (let* ((body-copy (subseq body-list 0 (length body-list)))
+         (bitmap-start 0)
+         (end 0))
+    ;; for each character (STARTCHAR/ENDCHAR block)
+    (dotimes (i numchars)
+      ;; find the first occurrence of the BITMAP string
+      (setf bitmap-start (find-position body-copy "BITMAP"))
+      (when (eq nil bitmap-start)
+        (error "Missing BITMAP block"))
+      ;; parse the lines between STARTCHAR and BITMAP into a hash
+      (let ((charhash (bdf-list-to-hash
+                       (linelist-to-bdf-list (subseq body-copy 0 bitmap-start)))))
+        ;; "BBX 8 16 0 -2" declares a bounding box that is 8 pixels wide and 16 pixels tall.
+        ;; The lower left-hand corner of the character is offset by 0 pixels on the X-axis and
+        ;; -2 pixels on the Y-axis.
+        ;; "ENCODING 65" declares the decimal code point for this glyph in the font.
 
-;; split string on first whitespace
+        ;; pull the BBX x/y coords and ENCODING values out of the hash,
+        ;; since they determine how many lines after BITMAP should occur
+        (let ((y (second (gethash :BBX charhash)))
+              (encoding (gethash :ENCODING charhash)))
+          ;; store the hash @ the character-props array index corresponding to ENCODING value
+          (setf (aref character-props encoding) charhash)
+          ;; parse y lines after BITMAP into a bitvector &
+          ;; put that bitvector into character-bits @ ENCODING index
+          ;; TODO there are some dependencies on x being 8 wide here
+          (setf (aref character-bits encoding)
+                (make-bitvec-from-bitlist (subseq body-copy (1+ bitmap-start) (+ 1 bitmap-start y))))))
 
-;; convert string to symbol? create a plist from "FONT Bauhaus" => :FONT "Bauhaus"
-;; (intern "mysym" "KEYWORD")
-;; get an element from a plist
-;; (getf (list :a 1 :b 2 :c 3) :a) => 1
+      ;; next find the first occurrence of the ENDCHAR string
+      (setf end (find-position body-copy "ENDCHAR"))
+      ;; return or bail if not found
+      (when (eq end nil)
+        (if (eq i numchars)
+            (return (list character-props character-bits))
+            (error "Terminating ENDCHAR not found")))
+      ;; fast-forward body-copy to one after the current end for the next iteration
+      (setf body-copy (nthcdr (1+ end) body-copy)))
+    (list character-props character-bits)))
 
-;; Get a subsequence
-;; (subseq "testing" 0 2) => "te"
-;; search for a substring
-;; (search "we" "if we can't be free") => 3
 
-;; number from string rep:
-;; (read-from-string "#X23")
-;; format number as binary:
-;; (format nil "~,'0b" 5)
+(defun load-bdf-file (filename)
+  "Loads and parses BDF file specified by FILENAME, returning a hash-table key/value pairs
+of the properties provided in the header, an array of hash tables at :CHARPROPS and
+an equal sized array of bitvectors at :CHARBITS"
+  (let* ((filebuf (with-open-file (stream filename)
+                    (loop for line = (read-line stream nil)
+                          while line
+                          collect line)))
+         (startchar-pos (find-position filebuf "STARTCHAR"))
+         (header-list (subseq filebuf 0 startchar-pos))
+         (body-list (subseq filebuf startchar-pos (length filebuf)))
+         (header-hash (bdf-list-to-hash (linelist-to-bdf-list header-list)))
+         (num-chars (gethash :CHARS header-hash))
+         (character-bits (make-array num-chars))
+         (character-props (make-array num-chars))
+         (parsed-body-list (body-list-to-char-list body-list num-chars character-props character-bits)))
+    (setf (gethash :CHARPROPS header-hash) (first parsed-body-list))
+    (setf (gethash :CHARBITS header-hash) (second parsed-body-list))
+    header-hash))
+
+
+;; (defparameter bauhausfont (load-bdf-file "Bauhaus.bdf"))
+;; (equal (aref (gethash :CHARBITS bauhausfont) 72) #*0110011001100110011001100111011001110110011001100110011001100110) ;; => T
+;; (equal (gethash :CHARS bauhausfont) 298) ;; => T
+;; ;; kinda weird it's a symbol? artifact of using read-from-string
+;; (equal (gethash :FONT bauhausfont) 'BAUHAUS) ;; => T
+;; (equal (gethash :BBX (aref (gethash :CHARPROPS bauhausfont) 72)) '(8 8 0 -1)) ;; => T
+
+
 
