@@ -1,7 +1,6 @@
 (ql:quickload "portmidi")
 
 (portmidi:initialize)
-
 (portmidi:count-devices)
 (portmidi:list-devices)
 
@@ -28,7 +27,7 @@
 (portmidi:write-short-midi stream 0 (portmidi:note-off 0 22))
 
 ;; should maybe be arrays or hashmaps for speed?
-(defvar *notes* '(:c 60 :df 61 :d 62 :ef 63 :e 64 :f 65 :gf 66 :g 67 :af 68 :a 69 :bf 70 :b 71))
+(defvar *notes* '(:c 60 :c# 61 :d 62 :d# 63 :e 64 :f 65 :f# 66 :g 67 :g# 68 :a 69 :a# 70 :b 71))
 
 (defvar *scales* '(:major (0 2 2 1 2 2 2 1)
                    :minor (0 2 1 2 2 1 2 2)))
@@ -44,7 +43,26 @@
           do (setf lastnote (+ x lastnote))
           collect lastnote)))
 
+(defun translate-chromatic (increment note)
+  (+ increment note))
+
 (iternote (getf *notes* :c) (getf *scales* :minor))
+
+(defstruct note
+  (id nil :type keyword)
+  (midi-value 0 :type fixnum)
+  (freq 0.0 :type single-float))
+
+(make-note :id :C-4 :midi-value 60 :freq 262.0)
+
+(defun frequency-of-nth-key (n)
+  (* 440.0 (expt 2 (/ (- n 49) 12))))
+
+(frequency-of-nth-key 49)
+
+(defvar *notes-array* (make-array 255 :element-type 'note))
+(loop for i from 0 to 255
+      do ())
 
 (loop for i in (iternote (getf *notes* :c) (getf *chords* :min))
       do (progn (portmidi:write-short-midi stream 0 (portmidi:note-on 0 i))
@@ -56,6 +74,6 @@
 ;; just returns a pointer? not super useful
 ;; (portmidi:get-device-info *default-midi-out*)
 ;; (portmidi:get-device-info *default-midi-in*)
-
-
 ;; (portmidi:terminate)
+;; (format nil "hit gc notification hook ~s" "testtest")
+
