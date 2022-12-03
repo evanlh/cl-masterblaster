@@ -9,7 +9,8 @@
 (defconstant +CHAR_HEIGHT+ 8)
 
 (defun draw-character (renderer posx posy charnum)
-  ;; TODO assert charnum is in range
+  (when (or (> charnum (length *bitmap-font*)) (< charnum 0))
+    (error "Character out of range"))
   ;; TODO replace charnum with character?
   (let ((bits (aref *bitmap-font* charnum)))
     (loop for i from 0 to (- (* +CHAR_WIDTH+ +CHAR_HEIGHT+) 1)
@@ -21,7 +22,7 @@
 
 (defun charcode-from-string (str i)
   (char-code (schar str i)))
-;; (charcode-from-string "ab" 1)
+;; (charcode-from-string "ab" 1) ;; => 98
 
 (defun draw-string (renderer posx posy s)
   ;; TODO assert enough screen space?
