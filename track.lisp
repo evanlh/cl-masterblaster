@@ -24,7 +24,8 @@
 (defun track-set-note (track index note)
   "Set the TRACK's note value at INDEX to NOTE.
    NOTE can take values 0=no note (sustain), 1-108 note on, 255 note off"
-  (unless (or (and (>= note +NOTE-MIN-VALUE+) (<= note +NOTE-MAX-VALUE+)) (= note +NOTE-OFF-VALUE+))
+  (unless (or (and (>= note +NOTE-MIN-VALUE+) (<= note +NOTE-MAX-VALUE+))
+              (= note +NOTE-NO-VALUE+) (= note +NOTE-OFF-VALUE+))
     (error "NOTE should be in the range 1-108, 255 for note off, 0 for no note"))
   (setf (aref (slot-value track 'notes) (mod index (track-length track))) note))
 
@@ -48,22 +49,32 @@
       (when (> (aref rhythm i) 0)
         (track-set-note track i note)))))
 
+;; TODO (make-euclidean-track 8 5)
+;; TODO (make-track-from-list (list :A-5 nil :A-5 :nil :C-5 :nil))
+
+
 (defparameter test-track (make-instance 'track :length 64))
 (slot-value test-track 'notes)
-(track-set-note test-track 122 0)
-(track-get-note test-track 122)
+(= (track-set-note test-track 122 0) 0)
+(= (track-get-note test-track 122) 0)
 (track-get-note-struct test-track 122)
 (track-rotate test-track 5)
 
 (defparameter test-etrack (make-instance 'track :length 5 :ticks-per-bar 5))
-(track-set-euclidean test-etrack 2 107)
+(track-set-euclidean test-etrack 2 39)
 (slot-value test-etrack 'notes)
 (track-get-note test-etrack 0)
 (track-get-note-struct test-etrack 0)
+(equalp (note-id #S(NOTE :ID "B 3" :OCTAVE 3 :NOTE :B :MIDI-VALUE 59 :FREQ 246.94165 :INDEX 38)) "B 3")
+
 (track-get-note test-etrack 1)
 (track-get-note-struct test-etrack 1)
 (track-ticks-per-bar test-etrack)
 
+(defparameter test-metronome (make-instance 'track :length 4 :ticks-per-bar 4))
+(track-set-euclidean test-metronome 4 39)
+(track-set-euclidean test-metronome 1 51)
+(slot-value test-metronome 'notes)
 
 ;; Archived thinking out loud....
 
