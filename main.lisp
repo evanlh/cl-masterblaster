@@ -1,5 +1,11 @@
+(defpackage #:masterblaster
+  (:use #:cl))
+
 (ql:quickload "sdl2")
-(load "./font.lisp")
+(ql:quickload "cl-portaudio")
+
+(load "font.lisp")
+
 
 (defconstant +SCREEN-WIDTH+ 320)
 (defconstant +SCREEN-HEIGHT+ 240)
@@ -30,7 +36,7 @@
         do (draw-character renderer (+ posx (* i +CHAR_WIDTH+)) posy (charcode-from-string s i))))
 
 
-(defun init-display ()
+(defun display (fn)
   (sdl2:with-init (:everything)
     (format t "Using SDL Library Version: ~D.~D.~D~%"
             sdl2-ffi:+sdl-major-version+
@@ -46,20 +52,9 @@
           (print w)
           (print h)))
 
-      (sdl2:set-render-draw-color renderer 0 0 0 0)
-      (sdl2:render-clear renderer)
-      (sdl2:set-render-draw-color renderer 255 255 255 255)
-      (sdl2:render-draw-point renderer 100 100)
-      (loop for c from 0 to (- (length *bitmap-font*) 1)
-            do (let* ((y (floor c 40))
-                      (x (- c (* 40 y))))
-                 (print (list  x y c))
-                 (draw-character renderer (* x 8) (* y 8) c)))
-      (draw-string renderer 200 200 "Hello World!")
-      (sdl2:render-present renderer)
-
       ;; start event loop
-)
+      (funcall fn window renderer)
+      )
     (sdl2:with-event-loop (:method :poll)
       ;; ESC will exit
       (:keyup (:keysym keysym)
@@ -68,11 +63,85 @@
       ;; re-renders / blit texture goes here
       ;;         (:idle ()
       ;;                )
-      (:quit () t))
-      ))
+      (:quit () t))))
 
 (defun launch ()
   "Open our first window and draw some pixels"
-  (init-display))
+  (display
+   (lambda (window renderer)
+     (sdl2:set-render-draw-color renderer 0 0 0 0)
+     (sdl2:render-clear renderer)
+     (sdl2:set-render-draw-color renderer 255 255 255 255)
+     (sdl2:render-draw-point renderer 100 100)
+     (loop for c from 0 to (- (length *bitmap-font*) 1)
+           do (let* ((y (floor c 40))
+                     (x (- c (* 40 y))))
+                (print (list  x y c))
+                (draw-character renderer (* x 8) (* y 8) c)))
+     (draw-string renderer 200 200 "Hello World!")
+     (sdl2:render-present renderer)
+     )))
 
-(launch)
+;; (launch)
+
+(defun axis-translator (x11 x12 x21 x22)
+  (let* ((x (/ (- x21 x22) (- x11 x12)))
+         (b (- x22 (* x12 x))))
+    (lambda (i)
+      (+ (* i x) b))))
+
+(= (funcall (axis-translator -1 1 240 0) -1) 240)
+(= (funcall (axis-translator -1 1 240 0) 1) 0)
+(= (funcall (axis-translator -1 1 240 0) 0) 120)
+(= (funcall (axis-translator -1 1 240 0) 2) -120)
+
+(= (funcall (axis-translator 0 2 160 320) 0) 160)
+(= (funcall (axis-translator 0 2 160 320) 2) 320)
+(= (funcall (axis-translator -1 1 0 320) -1) 0)
+(= (funcall (axis-translator -1 1 0 320) 1) 320)
+
+(defun plot (fn &optional (x1 -1.0) (x2 1.0) (y1 -1.0) (y2 1.0))
+  (display
+   (lambda (window renderer)
+     (sdl2:set-render-draw-color renderer 0 0 0 0)
+     (sdl2:render-clear renderer)
+     (sdl2:set-render-draw-color renderer 255 255 255 255)
+
+     (let* ((tn-x-inverse (axis-translator 0 +SCREEN-WIDTH+ x1 x2))
+            (tn-y (axis-translator y1 y2 +SCREEN-HEIGHT+ 0))
+            (tn-x (axis-translator x1 x2 0 +SCREEN-WIDTH+))
+            (origin-x (floor (funcall tn-x 0)))
+            (origin-y (floor (funcall tn-y 0)))
+            (x 0))
+       ;; draw the origin
+       (sdl2:set-render-draw-color renderer 255 255 0 255)
+       (sdl2:render-draw-line renderer 0 origin-y +SCREEN-WIDTH+ origin-y)
+       (sdl2:render-draw-line renderer origin-x 0 origin-x +SCREEN-HEIGHT+)
+       ;; plot the fn
+       (loop while (<= x +SCREEN-WIDTH+) do
+         (let* ((origx (funcall tn-x-inverse x))
+                (origy (funcall fn origx))
+                (y (floor (funcall tn-y origy))))
+           ;; (format t "~d,~d -> ~d,~d~%" origx origy x y)
+           (sdl2:set-render-draw-color renderer 255 255 255 255)
+           (sdl2:render-draw-point renderer x y)
+           (incf x 1))
+             )
+       )
+     (sdl2:render-present renderer)
+
+     )))
+
+(plot (lambda (x) (sin x)) 0 (* 2 PI))
+(plot (lambda (x) (cos x)) 0 (* 2 PI))
+
+;; (defun distance1d (x1 x2)
+;;   (abs (- x1 x2)))
+
+;; (defun midpoint (x1 x2)
+;;   (let ((distance (distance1d x1 x2)))
+;;     (if (> x1 x2)
+;;         (- x1 (/ distance 2))
+;;         (- x2 (/ distance 2)))))
+
+
