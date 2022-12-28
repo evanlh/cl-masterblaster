@@ -55,8 +55,8 @@
 
 (defparameter test-track (make-instance 'track :length 64))
 (slot-value test-track 'notes)
-(= (track-set-note test-track 122 0) 0)
-(= (track-get-note test-track 122) 0)
+(= (track-set-note test-track 122 1) 1)
+(= (track-get-note test-track 122) 1)
 (track-get-note-struct test-track 122)
 (track-rotate test-track 5)
 

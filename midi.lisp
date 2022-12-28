@@ -48,21 +48,6 @@
 
 (iternote (getf *notes* :c) (getf *scales* :minor))
 
-(defstruct note
-  (id nil :type keyword)
-  (midi-value 0 :type fixnum)
-  (freq 0.0 :type single-float))
-
-(make-note :id :C-4 :midi-value 60 :freq 262.0)
-
-(defun frequency-of-nth-key (n)
-  (* 440.0 (expt 2 (/ (- n 49) 12))))
-
-(frequency-of-nth-key 49)
-
-(defvar *notes-array* (make-array 255 :element-type 'note))
-(loop for i from 0 to 255
-      do ())
 
 (loop for i in (iternote (getf *notes* :c) (getf *chords* :min))
       do (progn (portmidi:write-short-midi stream 0 (portmidi:note-on 0 i))

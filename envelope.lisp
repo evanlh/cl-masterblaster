@@ -51,64 +51,20 @@ Coordinates must be listed in ascending order along the X axis and should not ov
 
 (= (envelope-x-at (make-envelope 0.0 1.0 2.0 1.0 3.0 0.0) 1) 2.0)
 
-(defun envelope-interpolator (env)
-  (let* ((apos 0)
-         (p1 (aref env apos))
-         (lastpos (- (length env) 2))
-         (x1 (point-x p1))
-         (y1 (point-y p1))
-         (p2 (aref env (1+ apos)))
-         (x2 (point-x p2))
-         (y2 (point-y p2))
-         (rise (- y2 y1))
-         (run (- x2 x1))
-         (slope (/ rise run))
-         (lastx 0))
-    (lambda (px)
-      ;; (format t "x1 ~d x2 ~d y1 ~d y2 ~d~%" x1 x2 y1 y2)
-      (when (< px lastx)
-        (error "This is a forward-only interpolator. Successive calls must be >= prior calls."))
-      (setf lastx px)
-      (if (> px x2)
-        (if (= apos lastpos)
-            y2
-            (progn
-              (loop until (or (= apos lastpos) (and (>= px x1) (<= px x2))) do
-                (incf apos)
-                (setf p1 (aref env apos))
-                (setf x1 (point-x p1))
-                (setf y1 (point-y p1))
-                (setf p2 (aref env (1+ apos)))
-                (setf x2 (point-x p2))
-                (setf y2 (point-y p2))
-                (setf rise (- y2 y1))
-                (setf run (- x2 x1))
-                (setf slope (/ rise run))
-                ;; (format t "loop x1 ~d x2 ~d y1 ~d y2 ~d~%" x1 x2 y1 y2)
-                ;; (format t "retval ~d~%" (+ y1 (* (- px x1) slope)))
-                    )
-              (+ y1 (* (- px x1) slope))))
-        (+ y1 (* (- px x1) slope))))))
-
-
-(defparameter ei (envelope-interpolator (scale-envelope-x! (make-envelope 0.0 0.0 0.1 1.0 0.5 1.0 1.0 0.0) 100)))
-(equalp (mapcar ei (list 0 1 10 20 60 70 90 100 101 110 120))
-        '(0.0 0.1 1.0 1.0 0.8 0.6 0.20000005 0.0 0.0 0.0 0.0))
-
-(mapcar (envelope-interpolator (make-envelope 0.0 1.0 1.0 0.0)) '(0.0 0.25 0.5 0.75 1.0 1.25))
-(mapcar (envelope-interpolator (make-envelope 0.0 1.0 0.5 0.8 1.0 0.0)) '(0.0 0.25 0.5 0.75 1.0 1.25))
-
-
-(defun envelope-interpolator-looping (env &key (loop-p t) (loop-start 0) (loop-end (point-x (aref env (1- (length env))))))
+(defun envelope-interpolator (env &key (loop-p t) (loop-start 0) (loop-end (point-x (aref env (1- (length env))))))
+  "Return a lambda which can be called repeatedly with an X coordinate to give the corresponding Y coordinate in the
+provided ENVELOPE. Will loop by default unless LOOP-P is NIL. Loop points can be specified with LOOP-START and LOOP-END."
   (let* ((endpos (1- (length env)))
          (end-x (point-x (aref env endpos)))
+         (loop-len (- loop-end loop-start))
          (lastpos (1- endpos)))
     (assert (and (< loop-start end-x) (<= loop-end end-x)
-                 (>= loop-start 0) (> loop-end 0)))
+                 (>= loop-start 0) (> loop-end 0)
+                 (> loop-end loop-start)))
     (lambda (px)
       (let* ((adjustedpx  (if loop-p
-                              (mod (+ loop-start px) (- loop-end loop-start))
-                              (min (+ loop-start px) loop-end)))
+                              (+ loop-start (mod px loop-len))
+                              (max loop-start (min (+ loop-start px) loop-end))))
              (apos 0)
              (p1 (aref env apos))
              (x1 (point-x p1))
@@ -129,28 +85,18 @@ Coordinates must be listed in ascending order along the X axis and should not ov
                (slope (/ rise run)))
           (+ y1 (* (- adjustedpx x1) slope)))))))
 
-(equalp (mapcar (envelope-interpolator-looping (make-envelope 0.0 0.0 0.5 1.0 1.0 0.0)) '(0.0 0.25 0.5 0.75 1.0 1.25 1.5 1.75 2.0)) '(0.0 0.5 1.0 0.5 0.0 0.5 1.0 0.5 0.0))
+(equalp (mapcar (envelope-interpolator (make-envelope 0.0 0.0 0.5 1.0 1.0 0.0)) '(0.0 0.25 0.5 0.75 1.0 1.25 1.5 1.75 2.0)) '(0.0 0.5 1.0 0.5 0.0 0.5 1.0 0.5 0.0))
 
-(equalp (mapcar (envelope-interpolator-looping (make-envelope 0.0 0.0 0.5 1.0 1.0 0.0) :loop-start 0.5) '(0.0 0.25 0.5 0.75 1.0 1.25 1.5 1.75 2.0)) '(1.0 0.5 1.0 0.5 1.0 0.5 1.0 0.5 1.0))
+(equalp (mapcar (envelope-interpolator (make-envelope 0.0 0.0 0.5 1.0 1.0 0.0) :loop-start 0.5) '(0.0 0.25 0.5 0.75 1.0 1.25 1.5 1.75 2.0)) '(1.0 0.5 1.0 0.5 1.0 0.5 1.0 0.5 1.0))
 
-(equalp (mapcar (envelope-interpolator-looping (make-envelope 0.0 0.0 0.5 1.0 1.0 0.0) :loop-end 0.5) '(0.0 0.25 0.5 0.75 1.0 1.25 1.5 1.75 2.0)) '(0.0 0.5 0.0 0.5 0.0 0.5 0.0 0.5 0.0))
+(equalp (mapcar (envelope-interpolator (make-envelope 0.0 0.0 0.5 1.0 1.0 0.0) :loop-end 0.5) '(0.0 0.25 0.5 0.75 1.0 1.25 1.5 1.75 2.0)) '(0.0 0.5 0.0 0.5 0.0 0.5 0.0 0.5 0.0))
 
-(equalp (mapcar (envelope-interpolator-looping (scale-envelope-x! (make-envelope 0.0 1.0 1.0 0.0) 100)) '(0 10 20 30 40 50 60 70 80 90 100)) '(1.0 0.9 0.8 0.70000005 0.6 0.5 0.40000004 0.3 0.20000005 0.100000024 1.0))
+(equalp (mapcar (envelope-interpolator (scale-envelope-x! (make-envelope 0.0 1.0 1.0 0.0) 100)) '(0 10 20 30 40 50 60 70 80 90 100)) '(1.0 0.9 0.8 0.70000005 0.6 0.5 0.40000004 0.3 0.20000005 0.100000024 1.0))
 
-(equalp (mapcar (envelope-interpolator-looping (make-envelope 0.0 0.0 0.5 1.0 1.0 0.0) :loop-start 0.25 :loop-end 0.75) '(0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0)) '(0.5 0.7 0.9 0.100000024 0.29999995 0.5 0.70000005 0.9 0.099999905 0.29999995 0.5))
+(equalp (mapcar (envelope-interpolator (make-envelope 0.0 0.0 0.5 1.0 1.0 0.0) :loop-start 0.25 :loop-end 0.75) '(0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0)) '(0.5 0.7 0.9 0.9 0.70000005 0.5 0.70000005 0.9 0.9 0.70000005 0.5))
 
-(equalp (mapcar (envelope-interpolator-looping (make-envelope 0.0 0.0 0.5 1.0 1.0 0.0) :loop-p nil :loop-start 0.25 :loop-end 0.75) '(0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0)) '(0.5 0.7 0.9 0.9 0.70000005 0.5 0.5 0.5 0.5 0.5 0.5))
+(equalp (mapcar (envelope-interpolator (make-envelope 0.0 0.0 0.5 1.0 1.0 0.0) :loop-p nil :loop-start 0.25 :loop-end 0.75) '(0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0)) '(0.5 0.7 0.9 0.9 0.70000005 0.5 0.5 0.5 0.5 0.5 0.5))
 
-;; (mapcar (envelope-interpolator-looping (scale-envelope-x! (make-envelope 0.0 1.0 1.0 0.0) 100) :loop-start 25) '(0 10 20 30 40 50 60 70 80 90 100)) '(0.75 0.65 0.55 0.45 0.35000002 1.0 0.9 0.8 0.70000005 0.6 0.5)
-
-(equalp (mapcar (envelope-interpolator-looping (make-envelope 0.0 1.0 1.0 0.0 2.0 1.0 3.0 0.0 4.0 1.0) :loop-start 2.0 :loop-end 3.0) '(0.0 0.25 0.5 0.75 1.0 1.25 1.5 1.75 2)) (mapcar (envelope-interpolator-looping (make-envelope 0.0 1.0 1.0 0.0 2.0 1.0 3.0 0.0 4.0 1.0) :loop-start 1.0 :loop-end 2.0) '(0.0 0.25 0.5 0.75 1.0 1.25 1.5 1.75 2)))
-
-
-(plot (envelope-interpolator-looping (make-envelope 0.0 1.0 1.0 0.0 2.0 1.0 3.0 0.0 4.0 1.0) :loop-start 2.0 :loop-end 3.0) 0.0 4.0)
-
-(plot (envelope-interpolator-looping (make-envelope 0.0 0.0 0.5 1.0 1.0 0.0)
-                                     :loop-start 0.25 :loop-end 0.75
-                                     ))
 
 (defun interpolate-line-at-point (y1 y2 x1 x2 px)
   (let* ((rise (- y2 y1))
