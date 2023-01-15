@@ -1,8 +1,5 @@
 ;; (ql:quickload "cl-portaudio")
-
-(load "envelope.lisp")
 (load "track.lisp")
-
 ;; (use-package :portaudio)
 
 (defun play-sound (buf)
@@ -77,48 +74,3 @@
 (portaudio:with-audio
   (portaudio:device-info-default-low-output-latency (portaudio:get-device-info (portaudio:get-default-output-device))))
 
-(defvar test-buffer (make-array (* 44100 1) :element-type 'float))
-(setf test-buffer (make-array (* 44100 1) :element-type 'float))
-
-(loop for i from 0 to (- (length test-buffer) 1) do (setf (aref test-buffer i) (sin (/ i 24))))
-(length test-buffer)
-(play-sound test-buffer)
-
-(defun make-sample-buffer (time-in-ms sample-rate)
-  (make-array (ceiling (* time-in-ms (/ sample-rate 1000))) :element-type 'float))
-
-(defun make-track-sample-buffer (track bpm sample-rate)
-  (let* ((l (track-length track))
-         (bufsize (* (samples-per-tick bpm sample-rate (track-ticks-per-bar track)) l)))
-    (make-array (ceiling bufsize) :element-type 'float)))
-
-(defun buffer-as-function (buffer)
-  (lambda (x)
-    (if (or (< x 0) (>= x (length buffer)))
-        0.0
-        (aref buffer (floor x)))))
-
-(defclass instrument () ())
-(defclass sine-instrument (instrument) ())
-(defclass env-instrument (instrument) ())
-
-(defun samples-per-tick (bpm sample-rate ticks-per-bar)
-  (floor (/ sample-rate (/ bpm 60.0)) (/ ticks-per-bar 4)))
-
-(defmethod play-to-buffer ((instr sine-instrument) (track track) bpm sample-rate buffer)
-  (let ((spt (samples-per-tick bpm sample-rate (track-ticks-per-bar track)))
-        (last-note nil))
-    (loop for ti from 0 below (track-length track) do
-      (let* ((note (track-get-note track ti))
-            (note-struct (track-get-note-struct track ti))
-            (freq (and note-struct (note-freq note-struct))))
-        (loop for si from 0 below spt do
-          (if (not note-struct)
-              (setf (aref buffer (+ si (* ti spt))) 0)
-              (setf (aref buffer (+ si (* ti spt)))
-                    (sin (* si 2.0 PI (/ freq sample-rate))))))))))
-
-(defmethod play ((instr instrument) (track track) bpm sample-rate)
-  (let* ((buffer (make-track-sample-buffer track bpm sample-rate)))
-    (play-to-buffer instr track bpm sample-rate buffer)
-    (play-sound buffer)))

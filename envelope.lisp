@@ -22,7 +22,7 @@ Coordinates must be listed in ascending order along the X axis and should not ov
             (y (pop coords)))
         (when (= 0 i)
           (assert (= x 0.0)))
-        (assert (and (>= y 0.0) (<= y 1.0)))
+        (assert (and (>= y -1.0) (<= y 1.0)))
         (assert (or (not last-x) (> x last-x)))
         (setf (aref env i) (make-point :x x :y y))
         (setf last-x x)
@@ -98,6 +98,13 @@ provided ENVELOPE. Will loop by default unless LOOP-P is NIL. Loop points can be
 (equalp (mapcar (envelope-interpolator (make-envelope 0.0 0.0 0.5 1.0 1.0 0.0) :loop-p nil :loop-start 0.25 :loop-end 0.75) '(0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0)) '(0.5 0.7 0.9 0.9 0.70000005 0.5 0.5 0.5 0.5 0.5 0.5))
 
 
+;; (plot (envelope-interpolator (make-envelope 0.0 1.0 1.0 0.0 2.0 1.0 3.0 0.0 4.0 1.0) :loop-start 2.0 :loop-end 3.0) 0.0 4.0)
+;; (plot (envelope-interpolator
+;;        (make-envelope 0.0 0.0 0.5 1.0 1.0 0.0) :loop-p nil :loop-start 0.25 :loop-end 0.75))
+
+;; (plot (envelope-interpolator (make-envelope 0.0 0.0 0.5 1.0 1.0 0.0)))
+
+
 (defun interpolate-line-at-point (y1 y2 x1 x2 px)
   (let* ((rise (- y2 y1))
          (len (- x2 x1))
@@ -116,6 +123,42 @@ provided ENVELOPE. Will loop by default unless LOOP-P is NIL. Loop points can be
 
 (= (funcall (line-interpolator 0 10 0 5) 10) 20)
 (= (funcall (line-interpolator 0 10 0 10) 8) 8)
+
+(defun line-interpolator-with-easing (y1 y2 x1 x2 easingfn)
+  (let* ((rise (- y2 y1))
+         (len (- x2 x1))
+         (slope (/ rise len)))
+    (lambda (px)
+      (let ((percent (/ (- px x1) len)))
+        (+ y1 (* px slope (if-in-range 0.0 1.0 percent (funcall easingfn percent) 1.0)))))))
+
+;; (plot (line-interpolator-with-easing 0 3.0 0 5.0 #'ease-in-exp) -1 6 -1 6)
+(plot (line-interpolator 0 3.0 0 5.0) -1 6 -1 6)
+;; :( this only ever pulls the value down....
+
+(defun clamp (lo hi val)
+  (if (> val hi)
+      hi
+      (if (< val lo)
+          lo
+          val)))
+
+(= (clamp 5 10 11) 10)
+(= (clamp 5 10 3) 5)
+
+(defun lerp (x1 x2 blend)
+  (+ (* (- 1 blend) x1) (* x2 blend)))
+
+(= (lerp 10 20 .5) 15)
+
+(defun lerp-clamp (x1 x2 blend)
+  (clamp x1 x2 (lerp x1 x2 blend)))
+
+(= (lerp-clamp 10 20 1.1) 20)
+(= (lerp-clamp 10 20 -0.1) 10)
+
+(defun if-in-range (lo hi val in out)
+  (if (and (>= val lo) (<= val hi)) in out))
 
 
 (defun interpolate-line-over-buffer (buffer y1 y2 x1 x2)
@@ -144,3 +187,30 @@ provided ENVELOPE. Will loop by default unless LOOP-P is NIL. Loop points can be
 ;; (interpolate-envelope-over-buffer env2 test-buffer 0 22050)
 ;; (interpolate-envelope-over-buffer env2 test-buffer 22050 44100)
 
+(defun ease-in-quad (x) (* x x))
+(defun ease-out-quad (x) (- 1 (* (- 1 x) (- 1 x))))
+(defun ease-in-out-quad (x) (if (< x 0.5)
+                                (* 2 x x)
+                                (- 1 (/  (expt (+ 2 (* -2 x)) 2) 2))))
+
+(plot #'ease-in-quad 0.0 1.0 -1 1)
+(plot #'ease-out-quad 0.0 1.0 -1 1)
+(plot #'ease-in-out-quad 0.0 1.0 -1 1)
+
+
+(- (ease-in-quad 0.2) 0.2)
+
+(defun ease-in-exp (x) (if (= 0 x) 0.0 (expt 2 (- (* 10 x) 10))))
+(defun ease-out-exp (x) (if (= 1 x) 1.0 (- 1 (expt 2 (* -10 x)))))
+(defun ease-in-out-exp (x) (if (= 0 x)
+                               0.0
+                               (if (= 1 x) 1.0
+                                   (if (< x 0.5)
+                                       (/ (expt 2 (- (* 20 x) 10)) 2)
+                                       (/ (- 2.0 (expt 2 (+ 10 (* -20 x)))) 2)))))
+
+(plot #'ease-in-exp 0.0 1.0 -1 1)
+(plot #'ease-out-exp 0.0 1.0 -1 1)
+(plot #'ease-in-out-exp 0.0 1.0 -1 1)
+
+;; TODO more of these from https://easings.net
