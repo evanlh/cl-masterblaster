@@ -3,6 +3,7 @@
 (defconstant +NOTE-MIN-VALUE+ 1)
 (defconstant +NOTE-NO-VALUE+ 0)
 (defconstant +NOTE-OFF-VALUE+ 255)
+(defconstant +NOTE-OFF-STRING+ "off")
 
 (defstruct note
   (id nil :type string)
@@ -61,6 +62,11 @@
 (defun note (i)
   (if (= 0 i) nil
       (aref *notes-array* (1- i))))
+
+(defun note-string-value (i)
+  (cond ((= i 255) +NOTE-OFF-STRING+)
+        ((and (> i 0) (<= i 108)) (note-id (note i)))
+        (t nil)))
 
 ;; (defmacro note (index-or-note-symbol)
 ;;   `(if (= 0 ,index-or-note-symbol) nil

@@ -1,5 +1,15 @@
 ;; scratch
 
+;; (defun distance1d (x1 x2)
+;;   (abs (- x1 x2)))
+
+;; (defun midpoint (x1 x2)
+;;   (let ((distance (distance1d x1 x2)))
+;;     (if (> x1 x2)
+;;         (- x1 (/ distance 2))
+;;         (- x2 (/ distance 2)))))
+
+
 (defvar test-buffer (make-array (* 44100 1) :element-type 'float))
 (setf test-buffer (make-array (* 44100 1) :element-type 'float))
 
@@ -12,7 +22,7 @@
 
 (defun make-track-sample-buffer (track bpm sample-rate)
   (let* ((l (track-length track))
-         (bufsize (* (samples-per-tick bpm sample-rate (track-ticks-per-bar track)) l)))
+         (bufsize (* (samples-per-tick bpm sample-rateb (track-ticks-per-bar track)) l)))
     (make-array (ceiling bufsize) :element-type 'float)))
 
 (defun buffer->fn (buffer)
@@ -332,4 +342,123 @@
 
 
 ;; make a white noise generator
+
+;; Naive Park & Miller random number generator
+;; from Numerical Recipes in C, 7.1.2
+(defparameter my-random-seed 4357834578)
+(defun my-random-generator (&optional (seed my-random-seed))
+  (when (= seed 0) (setf seed my-random-seed))
+  (let* ((a 16807)
+         (m 2147483647)
+         (new-i (mod (* a seed) m)))
+    (setf my-random-seed new-i)
+    new-i))
+(my-random-generator)
+
+(defun rand0 (seed)
+  (when (= seed 0) (setf seed my-random-seed))
+  (let* ((IA 16807)
+         (IM 2147483647)
+         (AM (/ 1.0 IM))
+         (IQ 127773)
+         (IR 2836)
+         (k (/ seed IQ)))
+    (setf seed (-  (* IA (- seed (* k IQ))) (* IR k)))
+    (when (< 0 seed) (setf seed (+ IM seed)))
+    (setf seed (* seed AM))
+    (setf my-random-seed seed)
+    seed))
+
+(rand0 0)
+my-random-seed
+
+(defconstant +track-grid-border-padding+ 2)
+(defconstant +track-grid-border-thickness+ 1)
+
+;; playing with track UI
+(declaim (ftype (function (track fixnum fixnum fixnum fixnum fixnum list list list)) draw-note-track-lane-cell))
+(defun draw-note-track-lane-cell (track index xb yb w h bg-color sel-color char-color)
+  (display-set-draw-color-list bg-color)
+  (display-draw-fill-rect xb yb (+ xb w) (+ yb h))
+  (display-set-draw-color-list sel-color)
+  (display-draw-border-rect xb yb (+ xb w) (+ yb h))
+  (let* ((note (track-get-note track index))
+         (note-str (note-string-value note)))
+    (display-set-draw-color-list char-color)
+    (when note-str
+      (display-draw-string (+ xb +track-grid-border-padding+) (+ yb +track-grid-border-padding+) note-str))))
+
+(defun compute-track-cell-dimensions (numchars)
+  (let* ((inner-row-height +CHAR-HEIGHT+)
+         (inner-row-width (+ (* +CHAR-WIDTH+ numchars)))
+         (pad2 (* +track-grid-border-padding+ 2))
+         (outer-row-height (+ inner-row-height pad2 +track-grid-border-thickness+))
+         (outer-row-width (+ inner-row-width pad2 +track-grid-border-thickness+)))
+    (values inner-row-height inner-row-width outer-row-height outer-row-width)))
+
+(defun compute-track-tick-lcm (&rest tracks)
+  (let* ((ticks (mapcar #'track-ticks-per-bar tracks))
+         (tickslcm (apply #'lcm ticks)))
+    tickslcm))
+
+;; todo draw row labels
+(defun draw-note-track-lane (track x0 y0 outerh outerw &key (track-is-selectedp t) (row-selected nil) (fg-color +color-white+) (bg-color +color-black+) (alt-bg-color +color-darkgrey+) (row-selected-color +color-yellow+) (track-selected-color +color-silver+) (inc-row-labelsp nil))
+  (let* ((border2 (* +track-grid-border-thickness+ 2))
+         (track-len (track-length track))
+         (num-rows (min track-len))
+         (y1 (+ y0 +track-grid-border-thickness+ (floor (* outerh num-rows))))
+         (x1 (+ x0 outerw)))
+    ;; draw the bg & track border
+    (display-set-draw-color-list (if track-is-selectedp track-selected-color bg-color))
+    (display-draw-border-rect x0 y0 x1 y1)
+    (display-set-draw-color-list bg-color)
+    (multiple-value-bind (outerh-floored outerh-rem) (floor outerh)
+      ;; draw the rows
+      (dotimes (i num-rows)
+        (let ((yb (+ y0 +track-grid-border-thickness+ (floor (* i outerh))))
+              (xb (+ x0 +track-grid-border-thickness+))
+              (rect-height (+ (if (integerp (* i outerh-rem)) 1 0) (- outerh-floored border2)))
+              (rect-width (- outerw border2))
+              ;; alternate bg colors
+              (bg (if (= (mod i 2) 0) alt-bg-color bg-color))
+              (selectedp (and row-selected (= row-selected i))))
+          (draw-note-track-lane-cell track i xb yb rect-width rect-height bg
+                                     (if selectedp row-selected-color bg)
+                                     (if selectedp row-selected-color fg-color)))))
+    (values x1 y1)))
+
+(progn
+  (defparameter testtrack1 (make-instance 'track :length 4 :ticks-per-bar 4))
+  (track-set-euclidean testtrack1 4 52)
+  (slot-value testtrack1 'notes)
+
+  (defparameter testtrack2 (make-instance 'track :length 8 :ticks-per-bar 8))
+  (track-set-euclidean testtrack2 8 40)
+  (track-set-note testtrack2 1 255)
+  (slot-value testtrack2 'notes)
+
+  (defparameter testtrack3 (make-instance 'track :length 5 :ticks-per-bar 5))
+  (track-set-euclidean testtrack3 5 58)
+
+  (defparameter testtrack4 (make-instance 'track :length 8 :ticks-per-bar 6))
+  (track-set-euclidean testtrack4 3 28)
+  )
+
+(defun compute-tracks-outer-height (outerh &rest tracks)
+  (let* ((lcm (apply #'lcm (mapcar #'track-ticks-per-bar tracks)))
+         (theights (mapcar (lambda (track) (/ (* outerh lcm) (track-ticks-per-bar track))) tracks))
+         (minheight (apply #'min theights))
+         (ratio (/ outerh minheight)))
+    (mapcar (lambda (h) (* ratio h)) theights)))
+
+(display (lambda ()
+           (display-clear 0 0 0 255)
+           (multiple-value-bind (innerh innerw outerh outerw) (compute-track-cell-dimensions 3)
+             (let* ((track-heights (compute-tracks-outer-height outerh testtrack1 testtrack2 testtrack3 testtrack4)))
+               (print track-heights)
+               (progn (draw-note-track-lane testtrack1 0 0 (first track-heights) outerw)
+                      (draw-note-track-lane testtrack2 (* 1 outerw) 0 (second track-heights) outerw :row-selected 1)
+                      (draw-note-track-lane testtrack3 (* 2 outerw) 0 (third track-heights) outerw)
+                      (draw-note-track-lane testtrack4 (* 3 outerw) 0 (fourth track-heights) outerw))))))
+
 
