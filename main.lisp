@@ -5,6 +5,8 @@
 (ql:quickload "cl-portaudio")
 (ql:quickload "series")
 
+;; (ql:quickload "fset")
+
 (load "font.lisp")
 (load "sound.lisp")
 
@@ -19,6 +21,7 @@
 (defparameter *window-zoom-level* 2)
 
 (defparameter *keymap* (make-hash-table))
+(defparameter *keymap-events-list* '(:left :right :up :down :mod1-left :mod1-right :mod1-up :mod1-up :mod2-left :mod2-right :mod2-down :mod2-up :mod3-left :mod3-right :mod3-up :mod3-down :select :cancel))
 
 (defvar *current-draw-color* (list 255 255 255 255))
 (defconstant +color-white+ (list 255 255 255 255))
@@ -27,6 +30,28 @@
 (defconstant +color-grey+ (list #x80 #x80 #x80 #xff))
 (defconstant +color-darkgrey+ (list #x30 #x30 #x30 #xff))
 (defconstant +color-yellow+ (list #xff #xff 0 #xff))
+
+;; EVENTS
+
+(defun dispatch-key (key)
+  (let ((fn (gethash key *keymap*)))
+    (format t "~s~%" key)
+    (when fn (funcall fn))))
+
+;; TODO could maybe be a macro?
+(defun keymap-update (plist)
+  (dotimes (i (/ (length plist) 2))
+    (let ((k (nth (* i 2) plist))
+          (v (nth (1+ (* i 2)) plist)))
+      (assert (typep v 'function))
+      (setf (gethash k *keymap*) v))))
+
+(defun keymap-clear () (clrhash *keymap*))
+
+(keymap-update (list :left (lambda () (format t "left via keymap~%"))))
+
+
+;;;; DISPLAY
 
 (defun display-set-draw-color (r g b a)
   (declare (number r g b a))
@@ -122,11 +147,6 @@
   (loop for i from 0 to (- (length s) 1)
         do (display-draw-character (+ posx (* i +CHAR-WIDTH+)) posy (charcode-from-string s i))))
 
-(defun dispatch-key (key)
-  (let ((fn (gethash key *keymap*)))
-    (format t "~s~%" key)
-    (when fn (funcall fn))))
-
 (defun display-init ()
   (sdl2:with-init (:everything)
     (format t "Using SDL Library Version: ~D.~D.~D~%"
@@ -153,48 +173,44 @@
       (:keyup (:keysym keysym)
               (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-escape)
                 (sdl2:push-event :quit)))
-      ;; re-renders / blit texture goes here
-      ;;         (:idle ()
-      ;;                )
-      (:keydown (:keysym keysym)
-            (let ((scancode (sdl2:scancode-value keysym))
-                  (sym (sdl2:sym-value keysym))
-                  (mod (sdl2:mod-value keysym)))
-              (cond
-                ((and (sdl2:scancode= scancode :scancode-left) (= mod 1)) (dispatch-key :mod1-left))
-                ((and (sdl2:scancode= scancode :scancode-right) (= mod 1)) (dispatch-key :mod1-right))
-                ((and (sdl2:scancode= scancode :scancode-down) (= mod 1)) (dispatch-key :mod1-down))
-                ((and (sdl2:scancode= scancode :scancode-up) (= mod 1)) (dispatch-key :mod1-up))
+      ;; re-renders / blit texture goes here TODO this crashes
+      ;; (:idle ()
+      ;;        (sdl2:render-present *renderer*))
+      (:keydown
+       (:keysym keysym)
+       (let ((scancode (sdl2:scancode-value keysym))
+             (sym (sdl2:sym-value keysym))
+             (mod (sdl2:mod-value keysym)))
+         (cond
+           ((and (sdl2:scancode= scancode :scancode-left) (= mod 1)) (dispatch-key :mod1-left))
+           ((and (sdl2:scancode= scancode :scancode-right) (= mod 1)) (dispatch-key :mod1-right))
+           ((and (sdl2:scancode= scancode :scancode-down) (= mod 1)) (dispatch-key :mod1-down))
+           ((and (sdl2:scancode= scancode :scancode-up) (= mod 1)) (dispatch-key :mod1-up))
 
-                ((and (sdl2:scancode= scancode :scancode-left) (= mod 256)) (dispatch-key :mod2-left))
-                ((and (sdl2:scancode= scancode :scancode-right) (= mod 256)) (dispatch-key :mod2-right))
-                ((and (sdl2:scancode= scancode :scancode-down) (= mod 256)) (dispatch-key :mod2-down))
-                ((and (sdl2:scancode= scancode :scancode-up) (= mod 256)) (dispatch-key :mod2-up))
+           ((and (sdl2:scancode= scancode :scancode-left) (= mod 256)) (dispatch-key :mod2-left))
+           ((and (sdl2:scancode= scancode :scancode-right) (= mod 256)) (dispatch-key :mod2-right))
+           ((and (sdl2:scancode= scancode :scancode-down) (= mod 256)) (dispatch-key :mod2-down))
+           ((and (sdl2:scancode= scancode :scancode-up) (= mod 256)) (dispatch-key :mod2-up))
 
-                ((and (sdl2:scancode= scancode :scancode-left) (= mod 1024)) (dispatch-key :mod1-left))
-                ((and (sdl2:scancode= scancode :scancode-right) (= mod 1024)) (dispatch-key :mod1-right))
-                ((and (sdl2:scancode= scancode :scancode-down) (= mod 1024)) (dispatch-key :mod1-down))
-                ((and (sdl2:scancode= scancode :scancode-up) (= mod 1024)) (dispatch-key :mod1-up))
+           ((and (sdl2:scancode= scancode :scancode-left) (= mod 1024)) (dispatch-key :mod3-left))
+           ((and (sdl2:scancode= scancode :scancode-right) (= mod 1024)) (dispatch-key :mod3-right))
+           ((and (sdl2:scancode= scancode :scancode-down) (= mod 1024)) (dispatch-key :mod3-down))
+           ((and (sdl2:scancode= scancode :scancode-up) (= mod 1024)) (dispatch-key :mod3-up))
 
-                ((sdl2:scancode= scancode :scancode-left) (dispatch-key :left))
-                ((sdl2:scancode= scancode :scancode-right) (dispatch-key :right))
-                ((sdl2:scancode= scancode :scancode-down) (dispatch-key :down))
-                ((sdl2:scancode= scancode :scancode-up) (dispatch-key :up))
+           ((sdl2:scancode= scancode :scancode-left) (dispatch-key :left))
+           ((sdl2:scancode= scancode :scancode-right) (dispatch-key :right))
+           ((sdl2:scancode= scancode :scancode-down) (dispatch-key :down))
+           ((sdl2:scancode= scancode :scancode-up) (dispatch-key :up))
 
-                )
-              (format t "Key sym: ~a, code: ~a, mod: ~a~%"
-                      sym
-                      scancode
-                      mod)))
+           ((sdl2:scancode= scancode :scancode-return) (dispatch-key :select))
+           ((sdl2:scancode= scancode :scancode-backspace) (dispatch-key :cancel))
+           )
+         ;; (format t "Key sym: ~a, code: ~a, mod: ~a~%" sym scancode mod)
+         ))
       (:quit () (progn
                   (setf *window* nil)
                   (setf *renderer* nil)
                   t)))))
-
-
-;; (sdl:with-event-loop (:method :poll)
-;;   )
-
 
 (defun display-clear (&optional (r 255) (g 255) (b 255) (a 255))
   (display-set-draw-color r g b a)
@@ -206,6 +222,24 @@
   (funcall fn)
   (sdl2:render-present *renderer*))
 
+
+(defun display-if (predfn dispatch-on-true-fn)
+  (lambda ()
+    (when (funcall predfn) (display dispatch-on-true-fn))))
+
+(defun display-component (fn)
+  (let* ((component-plist (funcall fn))
+         ;; grab the display fn and remove it from the plist
+         (displayfn (getf component-plist :display)))
+    (remf component-plist :display)
+    ;; all that remains are the event bindings
+    (keymap-update
+     (loop for (k v) on component-plist
+           append (list k (display-if v displayfn))))
+    (display displayfn)))
+
+
+;;; LAUNCH & PLOT
 (defun launch ()
   "Open our first window and draw some pixels"
   (display

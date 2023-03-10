@@ -22,7 +22,7 @@
 
 (defun make-track-sample-buffer (track bpm sample-rate)
   (let* ((l (track-length track))
-         (bufsize (* (samples-per-tick bpm sample-rateb (track-ticks-per-bar track)) l)))
+         (bufsize (* (samples-per-tick bpm sample-rate (track-ticks-per-bar track)) l)))
     (make-array (ceiling bufsize) :element-type 'float)))
 
 (defun buffer->fn (buffer)
@@ -402,14 +402,14 @@ my-random-seed
     tickslcm))
 
 ;; todo draw row labels
-(defun draw-note-track-lane (track x0 y0 outerh outerw &key (track-is-selectedp t) (row-selected nil) (fg-color +color-white+) (bg-color +color-black+) (alt-bg-color +color-darkgrey+) (row-selected-color +color-yellow+) (track-selected-color +color-silver+) (inc-row-labelsp nil))
+(defun draw-note-track-lane (track x0 y0 outerh outerw &key (row-selected nil) (fg-color +color-white+) (bg-color +color-black+) (alt-bg-color +color-darkgrey+) (row-selected-color +color-yellow+) (track-selected-color +color-darkgrey+) (inc-row-labelsp nil))
   (let* ((border2 (* +track-grid-border-thickness+ 2))
          (track-len (track-length track))
          (num-rows (min track-len))
          (y1 (+ y0 +track-grid-border-thickness+ (floor (* outerh num-rows))))
          (x1 (+ x0 outerw)))
     ;; draw the bg & track border
-    (display-set-draw-color-list (if track-is-selectedp track-selected-color bg-color))
+    (display-set-draw-color-list (if row-selected track-selected-color alt-bg-color))
     (display-draw-border-rect x0 y0 x1 y1)
     (display-set-draw-color-list bg-color)
     (multiple-value-bind (outerh-floored outerh-rem) (floor outerh)
@@ -451,14 +451,80 @@ my-random-seed
          (ratio (/ outerh minheight)))
     (mapcar (lambda (h) (* ratio h)) theights)))
 
-(display (lambda ()
-           (display-clear 0 0 0 255)
-           (multiple-value-bind (innerh innerw outerh outerw) (compute-track-cell-dimensions 3)
-             (let* ((track-heights (compute-tracks-outer-height outerh testtrack1 testtrack2 testtrack3 testtrack4)))
-               (print track-heights)
-               (progn (draw-note-track-lane testtrack1 0 0 (first track-heights) outerw)
-                      (draw-note-track-lane testtrack2 (* 1 outerw) 0 (second track-heights) outerw :row-selected 1)
-                      (draw-note-track-lane testtrack3 (* 2 outerw) 0 (third track-heights) outerw)
-                      (draw-note-track-lane testtrack4 (* 3 outerw) 0 (fourth track-heights) outerw))))))
+(display-component
+ (lambda ()
+   (let* ((selected-track 0)
+          (row 0)
+          (tracks (list testtrack1 testtrack2 testtrack3 testtrack4)))
+     (list
+      :down
+      (lambda ()
+        (setf row (mod (1+ row) (track-length (nth selected-track tracks))))
+        t)
+      :up
+      (lambda ()
+        (setf row (mod (1- row) (track-length (nth selected-track  tracks))))
+        t)
+      :right
+      (lambda ()
+        (let* ((next-track (mod (1+ selected-track) (length tracks)))
+               (lratio (/ (track-ticks-per-bar (nth next-track tracks)) (track-ticks-per-bar (nth selected-track tracks))))
+               (new-row (min (1- (track-length (nth next-track tracks))) (round (* lratio row)))))
+          (setf selected-track next-track)
+          (setf row new-row)
+          t))
+      :left
+      (lambda ()
+        (let* ((next-track (mod (1- selected-track) (length tracks)))
+               (lratio (/ (track-ticks-per-bar (nth next-track tracks)) (track-ticks-per-bar (nth selected-track tracks))))
+               (new-row (min (1- (track-length (nth next-track tracks))) (round (* lratio row)))))
+          (setf selected-track next-track)
+          (setf row new-row)
+          t))
+      :mod1-right
+      (lambda ()
+        (let* ((track (nth selected-track tracks))
+               (note (track-get-note track row)))
+          (track-set-note track row (1+ note))
+          t))
+      :mod1-left
+      (lambda ()
+        (let* ((track (nth selected-track tracks))
+               (note (track-get-note track row)))
+          (track-set-note track row (1- note))
+          t))
+      :mod1-up
+      (lambda ()
+        (let* ((track (nth selected-track tracks))
+               (note (track-get-note track row)))
+          (track-set-note track row (+ note 12))
+          t))
+      :mod1-down
+      (lambda ()
+        (let* ((track (nth selected-track tracks))
+               (note (track-get-note track row)))
+          (track-set-note track row (- note 12))
+          t))
+      :display
+      (lambda ()
+        (display-clear 0 0 0 255)
+        (multiple-value-bind (innerh innerw outerh outerw) (compute-track-cell-dimensions 3)
+          (let* ((track-heights (compute-tracks-outer-height outerh testtrack1 testtrack2 testtrack3 testtrack4))
+                 (i 0))
+            (dolist (track tracks)
+              (draw-note-track-lane track (* i outerw) 0 (nth i track-heights) outerw
+                                    :row-selected (if (= selected-track i) row nil))
+              (incf i))
+            )))))))
 
+
+;; (display (lambda ()
+;;            (display-clear 0 0 0 255)
+;;            (multiple-value-bind (innerh innerw outerh outerw) (compute-track-cell-dimensions 3)
+;;              (let* ((track-heights (compute-tracks-outer-height outerh testtrack1 testtrack2 testtrack3 testtrack4)))
+;;                (print track-heights)
+;;                (progn (draw-note-track-lane testtrack1 0 0 (first track-heights) outerw)
+;;                       (draw-note-track-lane testtrack2 (* 1 outerw) 0 (second track-heights) outerw :row-selected 1)
+;;                       (draw-note-track-lane testtrack3 (* 2 outerw) 0 (third track-heights) outerw)
+;;                       (draw-note-track-lane testtrack4 (* 3 outerw) 0 (fourth track-heights) outerw))))))
 

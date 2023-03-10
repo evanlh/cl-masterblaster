@@ -24,10 +24,17 @@
 (defun track-set-note (track index note)
   "Set the TRACK's note value at INDEX to NOTE.
    NOTE can take values 0=no note (sustain), 1-108 note on, 255 note off"
-  (unless (or (and (>= note +NOTE-MIN-VALUE+) (<= note +NOTE-MAX-VALUE+))
-              (= note +NOTE-NO-VALUE+) (= note +NOTE-OFF-VALUE+))
-    (error "NOTE should be in the range 1-108, 255 for note off, 0 for no note"))
-  (setf (aref (slot-value track 'notes) (mod index (track-length track))) note))
+  ;; (unless (or (and (>= note +NOTE-MIN-VALUE+) (<= note +NOTE-MAX-VALUE+))
+  ;;             (= note +NOTE-NO-VALUE+) (= note +NOTE-OFF-VALUE+))
+  ;;   (error "NOTE should be in the range 1-108, 255 for note off, 0 for no note"))
+  (let ((coerced-note note))
+    (cond
+      ((> note +NOTE-OFF-VALUE+) (setf coerced-note +NOTE-NO-VALUE+))
+      ((> note +NOTE-MAX-VALUE+) (setf coerced-note +NOTE-OFF-VALUE+))
+      ((< note +NOTE-NO-VALUE+) (setf coerced-note +NOTE-OFF-VALUE+))
+      ((< note +NOTE-MIN-VALUE+) (setf coerced-note +NOTE-NO-VALUE+))
+      )
+    (setf (aref (slot-value track 'notes) (mod index (track-length track))) coerced-note)))
 
 (defun track-get-note (track index)
   "Get the TRACK's note value at INDEX"
