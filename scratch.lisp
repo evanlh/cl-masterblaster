@@ -10,12 +10,12 @@
 ;;         (- x2 (/ distance 2)))))
 
 
-(defvar test-buffer (make-array (* 44100 1) :element-type 'float))
-(setf test-buffer (make-array (* 44100 1) :element-type 'float))
+;; (defvar test-buffer (make-array (* 44100 1) :element-type 'float))
+;; (setf test-buffer (make-array (* 44100 1) :element-type 'float))
 
-(loop for i from 0 to (- (length test-buffer) 1) do (setf (aref test-buffer i) (sin (/ i 24))))
-(length test-buffer)
-(play-sound test-buffer)
+;; (loop for i from 0 to (- (length test-buffer) 1) do (setf (aref test-buffer i) (sin (/ i 24))))
+;; (length test-buffer)
+;; (play-sound test-buffer)
 
 (defun make-sample-buffer (time-in-ms sample-rate)
   (make-array (ceiling (* time-in-ms (/ sample-rate 1000))) :element-type 'float))
@@ -355,6 +355,10 @@
     new-i))
 (my-random-generator)
 
+(defun my-random-clamped ()
+  (/ 1.0 (my-random-generator)))
+(my-random-clamped)
+
 (defun rand0 (seed)
   (when (= seed 0) (setf seed my-random-seed))
   (let* ((IA 16807)
@@ -481,6 +485,12 @@ my-random-seed
           (setf selected-track next-track)
           (setf row new-row)
           t))
+      :cancel
+      (lambda ()
+        (let* ((track (nth selected-track tracks))
+               (note (track-get-note track row)))
+          (track-set-note track row 0)
+          t))
       :mod1-right
       (lambda ()
         (let* ((track (nth selected-track tracks))
@@ -517,14 +527,28 @@ my-random-seed
               (incf i))
             )))))))
 
+(defun midi-play-tracks (bpm &rest tracks)
+  )
 
-;; (display (lambda ()
-;;            (display-clear 0 0 0 255)
-;;            (multiple-value-bind (innerh innerw outerh outerw) (compute-track-cell-dimensions 3)
-;;              (let* ((track-heights (compute-tracks-outer-height outerh testtrack1 testtrack2 testtrack3 testtrack4)))
-;;                (print track-heights)
-;;                (progn (draw-note-track-lane testtrack1 0 0 (first track-heights) outerw)
-;;                       (draw-note-track-lane testtrack2 (* 1 outerw) 0 (second track-heights) outerw :row-selected 1)
-;;                       (draw-note-track-lane testtrack3 (* 2 outerw) 0 (third track-heights) outerw)
-;;                       (draw-note-track-lane testtrack4 (* 3 outerw) 0 (fourth track-heights) outerw))))))
+(defun ms-per-tick (bpm ticks-per-bar)
+  (floor (/ 1000 (/ bpm 60.0)) (/ ticks-per-bar 4)))
 
+(defun midi-play-track (bpm track)
+  (let* ((ms (ms-per-tick bpm (track-ticks-per-bar track)))
+         (ms-rt (* ms +internal-time-units-per-millisecond+))
+         (starttime (get-internal-real-time))
+         (lastnote nil))
+    (dotimes (i (track-length track))
+      (let ((note (track-get-note track i)))
+        (format t "~s~%" note)
+        (when (and lastnote (> note 0))
+          (midi-note-off lastnote))
+        (when (> note 0)
+          (midi-note-on note)
+          (setf lastnote note))
+        (spin-until (+ starttime (* i ms-rt)))))))
+
+(midi-play-track 80 testtrack2)
+
+;; todo: play multiple tracks at the same time
+;; todo: quick key to delete note

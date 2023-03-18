@@ -2,6 +2,12 @@
 (load "track.lisp")
 ;; (use-package :portaudio)
 
+(defun log-stream-parameters (p)
+  (format t "device: ~s~%" (portaudio:stream-parameters-device p))
+  (format t "channel count: ~s~%" (portaudio:stream-parameters-channel-count p))
+  (format t "sample-format: ~s~%" (portaudio:stream-parameters-sample-format p))
+  (format t "suggested latency: ~s~%" (portaudio:stream-parameters-suggested-latency p)))
+
 (defun play-sound (buf)
   (portaudio:with-audio
     ;; do audio stuff
@@ -46,11 +52,7 @@
         ;; (pa-sleep 2000)
     ))))
 
-(defun log-stream-parameters (p)
-  (format t "device: ~s~%" (portaudio:stream-parameters-device p))
-  (format t "channel count: ~s~%" (portaudio:stream-parameters-channel-count p))
-  (format t "sample-format: ~s~%" (portaudio:stream-parameters-sample-format p))
-  (format t "suggested latency: ~s~%" (portaudio:stream-parameters-suggested-latency p)))
+
 
 (portaudio:with-audio
   (portaudio:print-devices)

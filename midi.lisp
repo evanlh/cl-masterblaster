@@ -3,18 +3,12 @@
 (portmidi:initialize)
 (portmidi:count-devices)
 (portmidi:list-devices)
-(portmidi:close-midi)
 
-(defvar *default-midi-out* (portmidi:get-default-output-device-id))
-(defvar *default-midi-in* (portmidi:get-default-input-device-id))
+(defparameter *default-midi-out* (portmidi:get-default-output-device-id))
+(defparameter *default-midi-in* (portmidi:get-default-input-device-id))
 
 (defparameter stream (portmidi:open-output *default-midi-out* 1024 10))
-;; todo something like defvar i can redefine? have to setf here but should close the old one first,
-;; otherwise you have to terminate the whole thing
-(setf stream (portmidi:open-output *default-midi-out* 1024 0))
-
 (portmidi:close-midi stream)
-
 
 ;; hoozah!!
 (loop for i from 21 to 108
@@ -58,17 +52,33 @@
                 (sleep 0.1)
                 ))
 
-;; just returns a pointer? not super useful
+(defun midi-note-on (note &optional (velocity 80) (channel 0))
+  (portmidi:write-short-midi stream 0 (portmidi:note-on channel note velocity)))
+(defun midi-note-off (note &optional (channel 0))
+  (portmidi:write-short-midi stream 0 (portmidi:note-off channel note)))
+
 ;; (portmidi:get-device-info *default-midi-out*)
 ;; (portmidi:get-device-info *default-midi-in*)
 ;; (portmidi:terminate)
-;; (format nil "hit gc notification hook ~s" "testtest")
-
-
 
 ;; timing related funcs
-internal-time-units-per-second
+(defparameter *midi-start-clock-time* (get-internal-real-time))
+(defparameter +internal-time-units-per-millisecond+ (float (/ internal-time-units-per-second 1000)))
 
-(defparameter *midi-start-clock-time* (get-internal-run-time))
-(defconstant +seconds-to-usecs+ (float (/ 1 1000000)))
-(defconstant +rtime-to-usecs+ (float ()))
+(defun spin-wait (duration-in-ms)
+  (let* ((now (get-internal-real-time))
+        (then (+ now (* duration-in-ms +internal-time-units-per-millisecond+)))
+        (loops 0))
+    (loop
+      (incf loops)
+      (when (>= (get-internal-real-time) then)
+        (return loops)))))
+
+(defun spin-until (future-internal-real-time)
+  (let ((loops 0))
+    (loop
+      (when (>= (get-internal-real-time) future-internal-real-time)
+        (return loops))
+      (incf loops))
+    loops))
+
