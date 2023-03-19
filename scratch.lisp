@@ -441,10 +441,10 @@ my-random-seed
   (track-set-note testtrack2 1 255)
   (slot-value testtrack2 'notes)
 
-  (defparameter testtrack3 (make-instance 'track :length 5 :ticks-per-bar 5))
-  (track-set-euclidean testtrack3 5 58)
+  (defparameter testtrack3 (make-instance 'track :length 6 :ticks-per-bar 6))
+  (track-set-euclidean testtrack3 6 58)
 
-  (defparameter testtrack4 (make-instance 'track :length 8 :ticks-per-bar 6))
+  (defparameter testtrack4 (make-instance 'track :length 3 :ticks-per-bar 3))
   (track-set-euclidean testtrack4 3 28)
   )
 
@@ -527,14 +527,13 @@ my-random-seed
               (incf i))
             )))))))
 
-(defun midi-play-tracks (bpm &rest tracks)
-  )
-
 (defun ms-per-tick (bpm ticks-per-bar)
   (floor (/ 1000 (/ bpm 60.0)) (/ ticks-per-bar 4)))
 
 (defun midi-play-track (bpm track)
   (let* ((ms (ms-per-tick bpm (track-ticks-per-bar track)))
+         ;; note: this technique won't work so well when we want to
+         ;; adjust per note microtime
          (ms-rt (* ms +internal-time-units-per-millisecond+))
          (starttime (get-internal-real-time))
          (lastnote nil))
@@ -544,11 +543,62 @@ my-random-seed
         (when (and lastnote (> note 0))
           (midi-note-off lastnote))
         (when (> note 0)
-          (midi-note-on note)
+          (midi-note-on note) ;; !! bug !! should be midi value
           (setf lastnote note))
         (spin-until (+ starttime (* i ms-rt)))))))
 
 (midi-play-track 80 testtrack2)
 
-;; todo: play multiple tracks at the same time
-;; todo: quick key to delete note
+(defun midi-play-tracks (bpm &rest tracks)
+  (let* ((tpb-per-track (mapcar #'track-ticks-per-bar tracks))
+         (tracks-and-tpb (mapcar #'list tracks tpb-per-track))
+         (lastnotes (make-array (length tracks) :initial-element nil :element-type :note))
+         (lcm (apply #'compute-track-tick-lcm tracks))
+         (incby (/ 1 lcm))
+         (ms (ms-per-tick bpm lcm))
+         (ms-rt (* ms +internal-time-units-per-millisecond+))
+         (start-time (get-internal-real-time))
+         (n 0)
+         (track-index 0))
+    ;; TODO should pause GC here?
+    (format t "~s~%" tracks-and-tpb)
+    (dotimes (i lcm)
+      (setf track-index 0)
+      (dolist (l tracks-and-tpb)
+        (let* ((track (first l))
+               (tpb (second l))
+               (tick (* tpb n)))
+          (when (integerp tick)
+            ;; this sucks. we should unify note-struct and note somehow.
+            (let ((note (track-get-note track tick))
+                  (note-struct (track-get-note-struct track tick)))
+              (when (and (aref lastnotes track-index) (> note 0))
+                (midi-note-off (note-midi-value (aref lastnotes track-index)))
+                (format t "playing midi off ~s tick ~d ~%" (note-midi-value (aref lastnotes track-index)) tick)
+
+                (setf (aref lastnotes track-index) nil))
+              (when note-struct
+                (midi-note-on (note-midi-value note-struct))
+                (format t "playing midi note ~s tick ~d ~%" (note-midi-value note-struct) tick)
+                (setf (aref lastnotes track-index) note-struct)))))
+        (incf track-index))
+      (incf n incby)
+      (format t "~d ~d ~%" n i)
+      ;; spin until we reach the next tick
+      (spin-until (+ start-time (* (1+ i) ms-rt)))
+      )
+    (dotimes (i (length lastnotes))
+      (midi-note-off (note-midi-value (aref lastnotes i))))))
+
+(midi-play-tracks 120
+                  testtrack1
+                  ;; testtrack2
+                  testtrack3
+                  ;; testtrack4
+                  )
+
+(track-ticks-per-bar testtrack1)
+(track-length testtrack1)
+(slot-value testtrack2 'notes)
+(note-midi-value (track-get-note-struct testtrack1 0))
+(track-get-note-struct testtrack2 1)
