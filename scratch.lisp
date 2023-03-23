@@ -17,6 +17,9 @@
 ;; (length test-buffer)
 ;; (play-sound test-buffer)
 
+(load "envelope.lisp")
+(load "midi.lisp")
+
 (defun make-sample-buffer (time-in-ms sample-rate)
   (make-array (ceiling (* time-in-ms (/ sample-rate 1000))) :element-type 'float))
 
@@ -259,7 +262,6 @@
 (plot (instrument->fn (track->freq-gate-trigger test-metronome
                                                 (instrument+fx #'simple-triangle-instrument #'simple-volume-envelope)) :freq 440.0) 0 (/ 44100 4))
 
-(pl (track->buffer test-metronome (track->freq-gate-trigger test-metronome (mxdmx #'simple-triangle-instrument #'simple-square-instrument #'simple-saw-instrument))))
 
 (defun track-note-data-at-sample-offset (track sample-index bpm sample-rate)
   (let* ((ticklength (samples-per-tick bpm sample-rate (track-ticks-per-bar track)))
@@ -277,6 +279,12 @@
     (dotimes (i (length out-buffer))
       (setf (aref out-buffer i) (apply instr i other-keys)))
     out-buffer))
+
+(defun pl (buffer)
+  (play-sound buffer)
+  (plot (buffer->fn buffer) 0 (length buffer)))
+
+(pl (track->buffer test-metronome (track->freq-gate-trigger test-metronome (mxdmx #'simple-triangle-instrument #'simple-square-instrument #'simple-saw-instrument))))
 
 (envelope-wrapper-hof #'one-pole-filter :modulated :q)
 
@@ -299,9 +307,6 @@
 (track-set-note short-track 1 40)
 (track-get-note-struct short-track 1)
 
-(defun pl (buffer)
-  (play-sound buffer)
-  (plot (buffer->fn buffer) 0 (length buffer)))
 
 (pl (track->buffer short-track
                    (track->freq-gate-trigger
@@ -549,56 +554,124 @@ my-random-seed
 
 (midi-play-track 80 testtrack2)
 
-(defun midi-play-tracks (bpm &rest tracks)
+(defun midi-play-tracks (bpm tracks &optional (loop-count 1))
+  "Play the selected tracks `loop-count` times at the set BPM"
   (let* ((tpb-per-track (mapcar #'track-ticks-per-bar tracks))
+         ;; zip together the tracks and their corresponding ticksperbar
          (tracks-and-tpb (mapcar #'list tracks tpb-per-track))
+         ;; array of last played note per track
          (lastnotes (make-array (length tracks) :initial-element nil :element-type :note))
          (lcm (apply #'compute-track-tick-lcm tracks))
          (incby (/ 1 lcm))
          (ms (ms-per-tick bpm lcm))
          (ms-rt (* ms +internal-time-units-per-millisecond+))
          (start-time (get-internal-real-time))
-         (n 0)
+         (nticks 0)
          (track-index 0))
     ;; TODO should pause GC here?
-    (format t "~s~%" tracks-and-tpb)
-    (dotimes (i lcm)
-      (setf track-index 0)
-      (dolist (l tracks-and-tpb)
-        (let* ((track (first l))
-               (tpb (second l))
-               (tick (* tpb n)))
-          (when (integerp tick)
-            ;; this sucks. we should unify note-struct and note somehow.
-            (let ((note (track-get-note track tick))
-                  (note-struct (track-get-note-struct track tick)))
-              (when (and (aref lastnotes track-index) (> note 0))
-                (midi-note-off (note-midi-value (aref lastnotes track-index)))
-                (format t "playing midi off ~s tick ~d ~%" (note-midi-value (aref lastnotes track-index)) tick)
+    (format t "~s ~d ~%" tracks-and-tpb loop-count)
+    (loop
+      ;; repeat loop-count
+      for i from 0 upto (* loop-count lcm)
+      while (not +midi-stop-playing-flag+)
+      do
+         (setf track-index 0)
+         (dolist (l tracks-and-tpb)
+           (let* ((track (first l))
+                  (tpb (second l))
+                  (tick (* tpb nticks)))
+             (when (integerp tick)
+               ;; TODO this sucks. Can we unify note-struct and note somehow?
+               (let ((note (track-get-note track tick))
+                     (note-struct (track-get-note-struct track tick)))
+                 (when (and (aref lastnotes track-index) (> note 0))
+                   (midi-note-off (note-midi-value (aref lastnotes track-index)))
+                   ;; (format t "playing midi off ~s tick ~d ~%" (note-midi-value (aref lastnotes track-index)) tick)
+                   (setf (aref lastnotes track-index) nil))
+                 (when note-struct
+                   (midi-note-on (note-midi-value note-struct))
+                   ;; (format t "playing midi note ~s tick ~d ~%" (note-midi-value note-struct) tick)
+                   (setf (aref lastnotes track-index) note-struct)))))
+           (incf track-index))
+         (incf nticks incby)
+          ;; (format t "~d ~d ~%" nticks i)
+          ;; spin until we reach the next tick or playback was stopped
 
-                (setf (aref lastnotes track-index) nil))
-              (when note-struct
-                (midi-note-on (note-midi-value note-struct))
-                (format t "playing midi note ~s tick ~d ~%" (note-midi-value note-struct) tick)
-                (setf (aref lastnotes track-index) note-struct)))))
-        (incf track-index))
-      (incf n incby)
-      (format t "~d ~d ~%" n i)
-      ;; spin until we reach the next tick
-      (spin-until (+ start-time (* (1+ i) ms-rt)))
-      )
+
+         (spin-untilp (lambda ()
+                        (or (>= (get-internal-real-time) (+ start-time (* (1+ i) ms-rt)))
+                            +midi-stop-playing-flag+))))
+    ;; whenever we stop playing (finished loop, stop requested)
+    ;; off all previous notes
     (dotimes (i (length lastnotes))
       (midi-note-off (note-midi-value (aref lastnotes i))))))
 
-(midi-play-tracks 120
-                  testtrack1
-                  ;; testtrack2
-                  testtrack3
-                  ;; testtrack4
-                  )
+(defparameter +midi-thread+ nil)
+(defparameter +midi-stop-playing-flag+ nil)
+(defparameter +midi-playback-args+ '())
+(defparameter +midi-playback-bpm+ 120)
+(defparameter +midi-playback-tracks+ nil)
 
-(track-ticks-per-bar testtrack1)
-(track-length testtrack1)
-(slot-value testtrack2 'notes)
-(note-midi-value (track-get-note-struct testtrack1 0))
-(track-get-note-struct testtrack2 1)
+(defun midi-thread-initialize ()
+  (format t "Started MIDI thread~%")
+  (apply #'midi-play-tracks +midi-playback-args+))
+
+(defun midi-play-tracks-own-thread (bpm tracks &optional (loop-count 1))
+  (when (not bt:*supports-threads-p*)
+    (error "No  thread support with this version of CL!"))
+  (when (not tracks)
+    (error "No tracks supplied"))
+  (setf +midi-stop-playing-flag+ nil)
+  (setf +midi-playback-args+ (list bpm tracks loop-count))
+  ;; (setf +midi-playback-bpm+ bpm)
+  ;; (setf +midi-playback-tracks+ tracks)
+  (when +midi-thread+
+    (bt:destroy-thread +midi-thread+))
+  (setf +midi-thread+
+        (bt:make-thread #'midi-thread-initialize :name "Masterblaster MIDI thread")))
+
+(defun midi-stop-own-thread ()
+  (format t "Stopping MIDI thread playback...~%")
+  (if (bt:thread-alive-p +midi-thread+)
+    (progn
+      (setf +midi-stop-playing-flag+ t)
+      (bt:join-thread +midi-thread+)
+      (setf +midi-stop-playing-flag+ nil)
+      (setf +midi-thread+ nil)
+      (format t "MIDI thread stopped and re-joined~%"))
+    (progn
+      (format t "MIDI thread already dead~%")
+      (setf +midi-thread+ nil))))
+
+
+(midi-play-tracks 80
+                  (list testtrack1
+                        testtrack2
+                        testtrack3
+                        testtrack4)
+                  10)
+
+(midi-play-tracks-own-thread
+ 120
+ (list
+  testtrack1
+  testtrack2
+  testtrack3
+  testtrack4)
+ 10)
+;; (midi-stop-own-thread)
+;; (bt:all-threads)
+;; (bt:destroy-thread (second (bt:all-threads)))
+;; (bt:thread-alive-p +midi-thread+)
+;; (bt:join-thread (second (bt:all-threads)))
+;; (equalp +midi-thread+ (third (bt:all-threads)))
+;; (setf +midi-thread+ nil)
+
+;; TODO steps for moving midi playback to its own thread
+;; 1. Create thread exclusively for midi playback
+;; 2. Some way to send messages between main thread & midi thread
+;; 3. Spacebar is hit on display, lambda sends msg to midi thread, midi thread plays/stops pattern
+;; 4. EXTRA CREDIT -- midi thread sends info on what track/tick is being played, main thread updates display
+;; Resources being accessed:
+;; Message queue. Just a global list? one for writing one for reading. or?
+;; Reading track data.

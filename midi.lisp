@@ -1,4 +1,5 @@
 (ql:quickload "portmidi")
+(ql:quickload "bordeaux-threads")
 
 (portmidi:initialize)
 (portmidi:count-devices)
@@ -8,17 +9,17 @@
 (defparameter *default-midi-in* (portmidi:get-default-input-device-id))
 
 (defparameter stream (portmidi:open-output *default-midi-out* 1024 10))
-(portmidi:close-midi stream)
+;; (portmidi:close-midi stream)
 
 ;; hoozah!!
-(loop for i from 21 to 108
-      do (progn (portmidi:write-short-midi stream 0 (portmidi:note-on 0 i))
-                (sleep 0.1)
-                (portmidi:write-short-midi stream 0 (portmidi:note-off 0 i))
-                (sleep 0.1)))
+;; (loop for i from 21 to 108
+;;       do (progn (portmidi:write-short-midi stream 0 (portmidi:note-on 0 i))
+;;                 (sleep 0.1)
+;;                 (portmidi:write-short-midi stream 0 (portmidi:note-off 0 i))
+;;                 (sleep 0.1)))
 
-(portmidi:write-short-midi stream 0 (portmidi:note-on 0 44))
-(portmidi:write-short-midi stream 0 (portmidi:note-off 0 44))
+;; (portmidi:write-short-midi stream 0 (portmidi:note-on 0 44))
+;; (portmidi:write-short-midi stream 0 (portmidi:note-off 0 44))
 
 ;; should maybe be arrays or hashmaps for speed?
 (defvar *notes* '(:c 60 :c# 61 :d 62 :d# 63 :e 64 :f 65 :f# 66 :g 67 :g# 68 :a 69 :a# 70 :b 71))
@@ -40,17 +41,17 @@
 (defun translate-chromatic (increment note)
   (+ increment note))
 
-(iternote (getf *notes* :c) (getf *scales* :minor))
+;; (iternote (getf *notes* :c) (getf *scales* :minor))
 
-(portmidi:write-short-midi stream 0 (portmidi:note-on 0 50))
-(portmidi:write-short-midi stream 0 (portmidi:note-off 0 50))
+;; (portmidi:write-short-midi stream 0 (portmidi:note-on 0 50))
+;; (portmidi:write-short-midi stream 0 (portmidi:note-off 0 50))
 
-(loop for i in (iternote (getf *notes* :c) (getf *chords* :maj))
-      do (progn (portmidi:write-short-midi stream 0 (portmidi:note-on 0 i))
-                (sleep 0.1)
-                (portmidi:write-short-midi stream 0.1 (portmidi:note-off 0 i))
-                (sleep 0.1)
-                ))
+;; (loop for i in (iternote (getf *notes* :c) (getf *chords* :maj))
+;;       do (progn (portmidi:write-short-midi stream 0 (portmidi:note-on 0 i))
+;;                 (sleep 0.1)
+;;                 (portmidi:write-short-midi stream 0.1 (portmidi:note-off 0 i))
+;;                 (sleep 0.1)
+;;                 ))
 
 (defun midi-note-on (note &optional (velocity 80) (channel 0))
   (portmidi:write-short-midi stream 0 (portmidi:note-on channel note velocity)))
@@ -74,11 +75,23 @@
       (when (>= (get-internal-real-time) then)
         (return loops)))))
 
+;; TODO Minor improvements we could make here:
+;; - calculate the mean loop time, break when >= future - meanlooptime
 (defun spin-until (future-internal-real-time)
+  (assert (typep future-internal-real-time 'integer))
   (let ((loops 0))
     (loop
       (when (>= (get-internal-real-time) future-internal-real-time)
         (return loops))
       (incf loops))
     loops))
+
+
+(defun spin-untilp (predicate)
+  (loop
+    (when (funcall predicate)
+      (return))))
+
+
+
 

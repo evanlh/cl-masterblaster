@@ -42,7 +42,10 @@
 
 (defun track-get-note-struct (track index)
   "Get the note struct corresponding to the note value at INDEX in TRACK"
-  (note (track-get-note track index)))
+  (let ((noteval (track-get-note track index)))
+    (if (and (> noteval 0) (<= noteval 108))
+        (note noteval)
+        nil)))
 
 (defun track-rotate (track n)
   "Rotate TRACK note data N ticks (forward if positive, backwards if negative)"
