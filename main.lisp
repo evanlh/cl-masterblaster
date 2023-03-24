@@ -21,7 +21,7 @@
 (defparameter *window-zoom-level* 2)
 
 (defparameter *keymap* (make-hash-table))
-(defparameter *keymap-events-list* '(:left :right :up :down :mod1-left :mod1-right :mod1-up :mod1-up :mod2-left :mod2-right :mod2-down :mod2-up :mod3-left :mod3-right :mod3-up :mod3-down :select :cancel))
+(defparameter *keymap-events-list* '(:left :right :up :down :mod1-left :mod1-right :mod1-up :mod1-up :mod2-left :mod2-right :mod2-down :mod2-up :mod3-left :mod3-right :mod3-up :mod3-down :select :cancel :play))
 
 (defvar *current-draw-color* (list 255 255 255 255))
 (defconstant +color-white+ (list 255 255 255 255))
@@ -204,6 +204,7 @@
 
            ((sdl2:scancode= scancode :scancode-return) (dispatch-key :select))
            ((sdl2:scancode= scancode :scancode-backspace) (dispatch-key :cancel))
+           ((sdl2:scancode= scancode :scancode-space) (dispatch-key :play))
            )
          ;; (format t "Key sym: ~a, code: ~a, mod: ~a~%" sym scancode mod)
          ))

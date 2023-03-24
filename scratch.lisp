@@ -496,6 +496,11 @@ my-random-seed
                (note (track-get-note track row)))
           (track-set-note track row 0)
           t))
+      :play
+      (lambda ()
+        (if +midi-is-playing+
+            (midi-stop-own-thread)
+            (midi-play-tracks-own-thread 120 tracks 10000)))
       :mod1-right
       (lambda ()
         (let* ((track (nth selected-track tracks))
@@ -611,6 +616,7 @@ my-random-seed
 (defparameter +midi-playback-args+ '())
 (defparameter +midi-playback-bpm+ 120)
 (defparameter +midi-playback-tracks+ nil)
+(defparameter +midi-is-playing+ nil)
 
 (defun midi-thread-initialize ()
   (format t "Started MIDI thread~%")
@@ -623,6 +629,7 @@ my-random-seed
     (error "No tracks supplied"))
   (setf +midi-stop-playing-flag+ nil)
   (setf +midi-playback-args+ (list bpm tracks loop-count))
+  (setf +midi-is-playing+ t)
   ;; (setf +midi-playback-bpm+ bpm)
   ;; (setf +midi-playback-tracks+ tracks)
   (when +midi-thread+
@@ -641,7 +648,8 @@ my-random-seed
       (format t "MIDI thread stopped and re-joined~%"))
     (progn
       (format t "MIDI thread already dead~%")
-      (setf +midi-thread+ nil))))
+      (setf +midi-thread+ nil)))
+  (setf +midi-is-playing+ nil))
 
 
 (midi-play-tracks 80
