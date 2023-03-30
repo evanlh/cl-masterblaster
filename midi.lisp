@@ -1,14 +1,73 @@
-(ql:quickload "portmidi")
-(ql:quickload "bordeaux-threads")
+(defparameter *default-midi-out* nil)
+(defparameter *default-midi-in* nil)
+(defparameter *stream* nil)
 
-(portmidi:initialize)
-(portmidi:count-devices)
-(portmidi:list-devices)
+;; Generic MIDI functions
+(defun midi-initialize-stream ()
+  (format t "Initializing MIDI, choosing default devices~%")
+  (when *stream*
+    (portmidi:close-midi *stream*)
+    (setf *stream* nil))
 
-(defparameter *default-midi-out* (portmidi:get-default-output-device-id))
-(defparameter *default-midi-in* (portmidi:get-default-input-device-id))
+  (portmidi:initialize)
+  (format t "Found ~d MIDI devices~%" (portmidi:count-devices))
+  (let* ((devlist (portmidi:list-devices))
+         (default-out (portmidi:get-default-output-device-id))
+         (default-in (portmidi:get-default-input-device-id))
+        (stream (portmidi:open-output default-out 1024 10)))
+    (format t "Using port: ~d name: ~s for MIDI OUT~%Using port: ~d, name: ~s for MIDI IN~%"
+            default-out
+            (cdr (nth default-out devlist))
+            default-in
+            (cdr (nth default-in devlist)))
+    (setf *default-midi-out* default-out)
+    (setf *default-midi-in* default-in)
+    (setf *stream* stream)
+    (values default-in default-out)))
 
-(defparameter stream (portmidi:open-output *default-midi-out* 1024 10))
+(defun midi-note-on (note &optional (velocity 80) (channel 0))
+  (portmidi:write-short-midi *stream* 0 (portmidi:note-on channel note velocity)))
+
+(defun midi-note-off (note &optional (channel 0))
+  (portmidi:write-short-midi *stream* 0 (portmidi:note-off channel note)))
+
+;; PRECISE TIMING FUNCTIONS
+(defparameter *midi-start-clock-time* (get-internal-real-time))
+(defparameter +internal-time-units-per-millisecond+ (float (/ internal-time-units-per-second 1000)))
+
+(defun spin-wait (duration-in-ms)
+  (let* ((now (get-internal-real-time))
+        (then (+ now (* duration-in-ms +internal-time-units-per-millisecond+)))
+        (loops 0))
+    (loop
+      (incf loops)
+      (when (>= (get-internal-real-time) then)
+        (return loops)))))
+
+;; TODO Minor improvements we could make here:
+;; - calculate the mean loop time, break when >= future - meanlooptime
+(defun spin-until (future-internal-real-time)
+  (assert (typep future-internal-real-time 'integer))
+  (let ((loops 0))
+    (loop
+      (when (>= (get-internal-real-time) future-internal-real-time)
+        (return loops))
+      (incf loops))
+    loops))
+
+(defun spin-untilp (predicate)
+  "Spin in a busy loop until the `predicate` function returns t"
+  (loop
+    (when (funcall predicate)
+      (return))))
+
+
+;; CRUFT BELOW HERE--
+;; (portmidi:get-device-info *default-midi-out*)
+;; (portmidi:get-device-info *default-midi-in*)
+;; (portmidi:terminate)
+
+
 ;; (portmidi:close-midi stream)
 
 ;; hoozah!!
@@ -52,46 +111,3 @@
 ;;                 (portmidi:write-short-midi stream 0.1 (portmidi:note-off 0 i))
 ;;                 (sleep 0.1)
 ;;                 ))
-
-(defun midi-note-on (note &optional (velocity 80) (channel 0))
-  (portmidi:write-short-midi stream 0 (portmidi:note-on channel note velocity)))
-(defun midi-note-off (note &optional (channel 0))
-  (portmidi:write-short-midi stream 0 (portmidi:note-off channel note)))
-
-;; (portmidi:get-device-info *default-midi-out*)
-;; (portmidi:get-device-info *default-midi-in*)
-;; (portmidi:terminate)
-
-;; timing related funcs
-(defparameter *midi-start-clock-time* (get-internal-real-time))
-(defparameter +internal-time-units-per-millisecond+ (float (/ internal-time-units-per-second 1000)))
-
-(defun spin-wait (duration-in-ms)
-  (let* ((now (get-internal-real-time))
-        (then (+ now (* duration-in-ms +internal-time-units-per-millisecond+)))
-        (loops 0))
-    (loop
-      (incf loops)
-      (when (>= (get-internal-real-time) then)
-        (return loops)))))
-
-;; TODO Minor improvements we could make here:
-;; - calculate the mean loop time, break when >= future - meanlooptime
-(defun spin-until (future-internal-real-time)
-  (assert (typep future-internal-real-time 'integer))
-  (let ((loops 0))
-    (loop
-      (when (>= (get-internal-real-time) future-internal-real-time)
-        (return loops))
-      (incf loops))
-    loops))
-
-
-(defun spin-untilp (predicate)
-  (loop
-    (when (funcall predicate)
-      (return))))
-
-
-
-

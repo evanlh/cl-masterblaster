@@ -3,12 +3,25 @@
 
 (ql:quickload "sdl2")
 (ql:quickload "cl-portaudio")
+(ql:quickload "portmidi")
 (ql:quickload "series")
+(ql:quickload "bordeaux-threads")
 
-;; (ql:quickload "fset")
+;; configure threads
+(defconstant +MAIN-THREAD+ (bt:current-thread))
+
+;; this doesn't seem to be working... tmpfixing it
+(defmacro with-mainthread (form)
+  `(progn ,form))
+;; (defmacro with-mainthread (form)
+;;   `(if (eq (bt:current-thread) +MAIN-THREAD+)
+;;        (progn ,form)
+;;        (error "This operation should only be executed on the main thread")))
+
 
 (load "font.lisp")
 (load "sound.lisp")
+(load "midi.lisp")
 
 (defconstant +SCREEN-WIDTH+ 320)
 (defconstant +SCREEN-HEIGHT+ 240)
@@ -32,7 +45,6 @@
 (defconstant +color-yellow+ (list #xff #xff 0 #xff))
 
 ;; EVENTS
-
 (defun dispatch-key (key)
   (let ((fn (gethash key *keymap*)))
     (format t "~s~%" key)
@@ -52,7 +64,6 @@
 
 
 ;;;; DISPLAY
-
 (defun display-set-draw-color (r g b a)
   (declare (number r g b a))
   (sdl2:set-render-draw-color *renderer* r g b a)
@@ -161,12 +172,15 @@
         (let ((tex (sdl2:create-texture renderer sdl2-ffi:+sdl-pixeltype-unknown+ sdl2-ffi:+sdl-textureaccess-streaming+ width height)))
           (let ((w (sdl2:texture-width tex))
                 (h (sdl2:texture-height tex)))
-            (print tex)
-            (print w)
-            (print h)))
+            (format t "Display: Created texture width: ~d height: ~d~%" w h)
+            ;; (print tex)
+            ;; (print w)
+            ;; (print h)
+            ))
         (setf *window* window)
         (setf *renderer* renderer)))
 
+    (format t "Display: Entering event loop~%")
     ;; start event loop
     (sdl2:with-event-loop (:method :poll)
       ;; ESC will exit
@@ -218,10 +232,12 @@
   (sdl2:render-clear *renderer*))
 
 (defun display (fn)
-  (when (not *window*)
-    (display-init))
-  (funcall fn)
-  (sdl2:render-present *renderer*))
+  (with-mainthread
+    (progn
+      (when (not *window*)
+        (display-init))
+      (funcall fn)
+      (sdl2:render-present *renderer*))))
 
 
 (defun display-if (predfn dispatch-on-true-fn)
@@ -231,6 +247,7 @@
 (defun display-component (fn)
   (let* ((component-plist (funcall fn))
          ;; grab the display fn and remove it from the plist
+         ;; TODO copy & mutate copy
          (displayfn (getf component-plist :display)))
     (remf component-plist :display)
     ;; all that remains are the event bindings
@@ -238,7 +255,6 @@
      (loop for (k v) on component-plist
            append (list k (display-if v displayfn))))
     (display displayfn)))
-
 
 ;;; LAUNCH & PLOT
 (defun launch ()
@@ -308,11 +324,324 @@
            (setf oldy y)
            (incf x 1)))))))
 
-(plot (lambda (x) (sin x)) 0 (* 2 PI) -1 1)
-(plot (lambda (x) (cos x)) 0 (* 2 PI))
-
+;; (plot (lambda (x) (sin x)) 0 (* 2 PI) -1 1)
+;; (plot (lambda (x) (cos x)) 0 (* 2 PI))
 
 ;; (setf *window* nil)
-(launch)
+;; (launch)
 
+
+
+(defconstant +track-grid-border-padding+ 2)
+(defconstant +track-grid-border-thickness+ 1)
+
+;; playing with track UI
+(declaim (ftype (function (track fixnum fixnum fixnum fixnum fixnum list list list)) draw-note-track-lane-cell))
+(defun draw-note-track-lane-cell (track index xb yb w h bg-color sel-color char-color)
+  "Draw a single cell for specified TRACK including the note found at INDEX, at coordinates XB/YB with
+  Width and Height. Outer border will be drawn in BG-COLOR, inner border in SEL-COLOR, chars in CHAR-COLOR"
+  (display-set-draw-color-list bg-color)
+  (display-draw-fill-rect xb yb (+ xb w) (+ yb h))
+  (display-set-draw-color-list sel-color)
+  (display-draw-border-rect xb yb (+ xb w) (+ yb h))
+  (let* ((note (track-get-note track index))
+         (note-str (note-string-value note)))
+    (display-set-draw-color-list char-color)
+    (when note-str
+      (display-draw-string (+ xb +track-grid-border-padding+) (+ yb +track-grid-border-padding+) note-str))))
+
+(defun compute-track-cell-dimensions (numchars)
+  (let* ((inner-row-height +CHAR-HEIGHT+)
+         (inner-row-width (+ (* +CHAR-WIDTH+ numchars)))
+         (pad2 (* +track-grid-border-padding+ 2))
+         (outer-row-height (+ inner-row-height pad2 +track-grid-border-thickness+))
+         (outer-row-width (+ inner-row-width pad2 +track-grid-border-thickness+)))
+    (values inner-row-height inner-row-width outer-row-height outer-row-width)))
+
+(defun compute-track-tick-lcm (&rest tracks)
+  (let* ((ticks (mapcar #'track-ticks-per-bar tracks))
+         (tickslcm (apply #'lcm ticks)))
+    tickslcm))
+
+;; todo draw row labels
+(defun draw-note-track-lane (track x0 y0 outerh outerw &key (row-selected nil) (fg-color +color-white+) (bg-color +color-black+) (alt-bg-color +color-darkgrey+) (row-selected-color +color-yellow+) (track-selected-color +color-darkgrey+) (inc-row-labelsp nil))
+  (let* ((border2 (* +track-grid-border-thickness+ 2))
+         (track-len (track-length track))
+         (num-rows (min track-len))
+         (y1 (+ y0 +track-grid-border-thickness+ (floor (* outerh num-rows))))
+         (x1 (+ x0 outerw)))
+    ;; draw the bg & track border
+    (display-set-draw-color-list (if row-selected track-selected-color alt-bg-color))
+    (display-draw-border-rect x0 y0 x1 y1)
+    (display-set-draw-color-list bg-color)
+    (multiple-value-bind (outerh-floored outerh-rem) (floor outerh)
+      ;; draw the rows
+      (dotimes (i num-rows)
+        (let ((yb (+ y0 +track-grid-border-thickness+ (floor (* i outerh))))
+              (xb (+ x0 +track-grid-border-thickness+))
+              (rect-height (+ (if (integerp (* i outerh-rem)) 1 0) (- outerh-floored border2)))
+              (rect-width (- outerw border2))
+              ;; alternate bg colors
+              (bg (if (= (mod i 2) 0) alt-bg-color bg-color))
+              (selectedp (and row-selected (= row-selected i))))
+          (draw-note-track-lane-cell track i xb yb rect-width rect-height bg
+                                     (if selectedp row-selected-color bg)
+                                     (if selectedp row-selected-color fg-color)))))
+    (values x1 y1)))
+
+(progn
+  (defparameter testtrack1 (make-instance 'track :length 4 :ticks-per-bar 4))
+  (track-set-euclidean testtrack1 4 52)
+  (slot-value testtrack1 'notes)
+
+  (defparameter testtrack2 (make-instance 'track :length 8 :ticks-per-bar 8))
+  (track-set-euclidean testtrack2 8 40)
+  (track-set-note testtrack2 1 255)
+  (slot-value testtrack2 'notes)
+
+  (defparameter testtrack3 (make-instance 'track :length 6 :ticks-per-bar 6))
+  (track-set-euclidean testtrack3 6 58)
+
+  (defparameter testtrack4 (make-instance 'track :length 3 :ticks-per-bar 3))
+  (track-set-euclidean testtrack4 3 28)
+  )
+
+(defun compute-tracks-outer-height (outerh &rest tracks)
+  (let* ((lcm (apply #'lcm (mapcar #'track-ticks-per-bar tracks)))
+         (theights (mapcar (lambda (track) (/ (* outerh lcm) (track-ticks-per-bar track))) tracks))
+         (minheight (apply #'min theights))
+         (ratio (/ outerh minheight)))
+    (mapcar (lambda (h) (* ratio h)) theights)))
+
+(defparameter +midi-thread+ nil)
+(defparameter +midi-stop-playing-flag+ nil)
+(defparameter +midi-playback-args+ '())
+(defparameter +midi-playback-bpm+ 120)
+(defparameter +midi-playback-tracks+ nil)
+(defparameter +midi-is-playing+ nil)
+
+
+(defun ms-per-tick (bpm ticks-per-bar)
+  (floor (/ 1000 (/ bpm 60.0)) (/ ticks-per-bar 4)))
+
+(defun midi-play-track (bpm track)
+  (let* ((ms (ms-per-tick bpm (track-ticks-per-bar track)))
+         ;; note: this technique won't work so well when we want to
+         ;; adjust per note microtime
+         (ms-rt (* ms +internal-time-units-per-millisecond+))
+         (starttime (get-internal-real-time))
+         (lastnote nil))
+    (dotimes (i (track-length track))
+      (let ((note (track-get-note track i)))
+        (format t "~s~%" note)
+        (when (and lastnote (> note 0))
+          (midi-note-off lastnote))
+        (when (> note 0)
+          (midi-note-on note) ;; !! bug !! should be midi value
+          (setf lastnote note))
+        (spin-until (+ starttime (* i ms-rt)))))))
+
+;; (midi-play-track 80 testtrack2)
+
+(defun midi-play-tracks (bpm tracks &optional (loop-count 1))
+  "Play the selected tracks `loop-count` times at the set BPM"
+  (let* ((tpb-per-track (mapcar #'track-ticks-per-bar tracks))
+         ;; zip together the tracks and their corresponding ticksperbar
+         (tracks-and-tpb (mapcar #'list tracks tpb-per-track))
+         ;; array of last played note per track
+         (lastnotes (make-array (length tracks) :initial-element nil))
+         ;; increment by the ratio of each track tick to the LCM
+         (lcm (apply #'compute-track-tick-lcm tracks))
+         (incby (/ 1 lcm))
+         (ms (ms-per-tick bpm lcm))
+         (ms-rt (* ms +internal-time-units-per-millisecond+))
+         (start-time (get-internal-real-time))
+         (nticks 0)
+         (track-index 0))
+    ;; TODO should pause GC here?
+    (format t "~s ~d ~%" tracks-and-tpb loop-count)
+    (loop
+      ;; repeat loop-count
+      for i from 0 upto (* loop-count lcm)
+      while (not +midi-stop-playing-flag+)
+      do
+         (setf track-index 0)
+         (dolist (l tracks-and-tpb)
+           (let* ((track (first l))
+                  (tpb (second l))
+                  (tick (* tpb nticks)))
+             (when (integerp tick)
+               ;; TODO this sucks. Can we unify note-struct and note somehow?
+               (let ((note (track-get-note track tick))
+                     (note-struct (track-get-note-struct track tick)))
+                 (when (and (aref lastnotes track-index) (> note 0))
+                   (midi-note-off (note-midi-value (aref lastnotes track-index)))
+                   ;; (format t "playing midi off ~s tick ~d ~%" (note-midi-value (aref lastnotes track-index)) tick)
+                   (setf (aref lastnotes track-index) nil))
+                 (when note-struct
+                   (midi-note-on (note-midi-value note-struct))
+                   ;; (format t "playing midi note ~s tick ~d ~%" (note-midi-value note-struct) tick)
+                   (setf (aref lastnotes track-index) note-struct)))))
+           (incf track-index))
+         (incf nticks incby)
+          ;; (format t "~d ~d ~%" nticks i)
+          ;; spin until we reach the next tick or playback was stopped
+         (spin-untilp (lambda ()
+                        (or (>= (get-internal-real-time) (+ start-time (* (1+ i) ms-rt)))
+                            +midi-stop-playing-flag+))))
+    ;; whenever we stop playing (finished loop, stop requested)
+    ;; off all previous notes
+    (dotimes (i (length lastnotes))
+      (midi-note-off (note-midi-value (aref lastnotes i))))))
+
+(defun midi-thread-initialize ()
+  (format t "Started MIDI thread~%")
+  (apply #'midi-play-tracks +midi-playback-args+))
+
+(defun midi-play-tracks-own-thread (bpm tracks &optional (loop-count 1))
+  (progn
+    (when (not bt:*supports-threads-p*)
+      (error "No  thread support with this version of CL!"))
+    (when (not tracks)
+      (error "No tracks supplied"))
+    (midi-initialize-stream)
+    (setf +midi-stop-playing-flag+ nil)
+    (setf +midi-playback-args+ (list bpm tracks loop-count))
+    (setf +midi-is-playing+ t)
+    ;; (setf +midi-playback-bpm+ bpm)
+    ;; (setf +midi-playback-tracks+ tracks)
+    (when +midi-thread+
+      (bt:destroy-thread +midi-thread+))
+    (setf +midi-thread+
+          (bt:make-thread #'midi-thread-initialize :name "Masterblaster MIDI thread"))))
+
+(defun midi-stop-own-thread ()
+  (progn
+    (format t "Stopping MIDI thread playback...~%")
+    (if (bt:thread-alive-p +midi-thread+)
+        (progn
+          (setf +midi-stop-playing-flag+ t)
+          (bt:join-thread +midi-thread+)
+          (setf +midi-stop-playing-flag+ nil)
+          (setf +midi-thread+ nil)
+          (format t "MIDI thread stopped and re-joined~%"))
+        (progn
+          (format t "MIDI thread already dead~%")
+          (setf +midi-thread+ nil)))
+    (setf +midi-is-playing+ nil)))
+
+
+;; (midi-play-tracks 80
+;;                   (list testtrack1
+;;                         testtrack2
+;;                         testtrack3
+;;                         testtrack4)
+;;                   10)
+
+;; (midi-play-tracks-own-thread
+;;  120
+;;  (list
+;;   testtrack1
+;;   testtrack2
+;;   testtrack3
+;;   testtrack4)
+;;  10)
+
+
+;; (midi-stop-own-thread)
+;; (bt:all-threads)
+;; (bt:destroy-thread (second (bt:all-threads)))
+;; (bt:thread-alive-p +midi-thread+)
+;; (bt:join-thread (second (bt:all-threads)))
+;; (equalp +midi-thread+ (third (bt:all-threads)))
+;; (setf +midi-thread+ nil)
+
+;; TODO steps for moving midi playback to its own thread
+;; 1. Create thread exclusively for midi playback
+;; 2. Some way to send messages between main thread & midi thread
+;; 3. Spacebar is hit on display, lambda sends msg to midi thread, midi thread plays/stops pattern
+;; 4. EXTRA CREDIT -- midi thread sends info on what track/tick is being played, main thread updates display
+;; Resources being accessed:
+;; Message queue. Just a global list? one for writing one for reading. or?
+;; Reading track data.
+
+
+;; TODO this is a nice & quick hack but just based on the verbosity of the approach (lambda, lambda, lambda..)
+;; probably ought to convert it to sth CLOS-based
+(display-component
+ (lambda ()
+   (let* ((selected-track 0)
+          (row 0)
+          (tracks (list testtrack1 testtrack2 testtrack3 testtrack4)))
+     (list
+      :down
+      (lambda ()
+        (setf row (mod (1+ row) (track-length (nth selected-track tracks))))
+        t)
+      :up
+      (lambda ()
+        (setf row (mod (1- row) (track-length (nth selected-track  tracks))))
+        t)
+      :right
+      (lambda ()
+        (let* ((next-track (mod (1+ selected-track) (length tracks)))
+               (lratio (/ (track-ticks-per-bar (nth next-track tracks)) (track-ticks-per-bar (nth selected-track tracks))))
+               (new-row (min (1- (track-length (nth next-track tracks))) (round (* lratio row)))))
+          (setf selected-track next-track)
+          (setf row new-row)
+          t))
+      :left
+      (lambda ()
+        (let* ((next-track (mod (1- selected-track) (length tracks)))
+               (lratio (/ (track-ticks-per-bar (nth next-track tracks)) (track-ticks-per-bar (nth selected-track tracks))))
+               (new-row (min (1- (track-length (nth next-track tracks))) (round (* lratio row)))))
+          (setf selected-track next-track)
+          (setf row new-row)
+          t))
+      :cancel
+      (lambda ()
+        (let* ((track (nth selected-track tracks))
+               (note (track-get-note track row)))
+          (track-set-note track row 0)
+          t))
+      :play
+      (lambda ()
+        (if +midi-is-playing+
+            (midi-stop-own-thread)
+            (midi-play-tracks-own-thread 120 tracks 10000)))
+      :mod1-right
+      (lambda ()
+        (let* ((track (nth selected-track tracks))
+               (note (track-get-note track row)))
+          (track-set-note track row (1+ note))
+          t))
+      :mod1-left
+      (lambda ()
+        (let* ((track (nth selected-track tracks))
+               (note (track-get-note track row)))
+          (track-set-note track row (1- note))
+          t))
+      :mod1-up
+      (lambda ()
+        (let* ((track (nth selected-track tracks))
+               (note (track-get-note track row)))
+          (track-set-note track row (+ note 12))
+          t))
+      :mod1-down
+      (lambda ()
+        (let* ((track (nth selected-track tracks))
+               (note (track-get-note track row)))
+          (track-set-note track row (- note 12))
+          t))
+      :display
+      (lambda ()
+        (display-clear 0 0 0 255)
+        (multiple-value-bind (innerh innerw outerh outerw) (compute-track-cell-dimensions 3)
+          (let* ((track-heights (compute-tracks-outer-height outerh testtrack1 testtrack2 testtrack3 testtrack4))
+                 (i 0))
+            (dolist (track tracks)
+              (draw-note-track-lane track (* i outerw) 0 (nth i track-heights) outerw
+                                    :row-selected (if (= selected-track i) row nil))
+              (incf i))
+            )))))))
 
