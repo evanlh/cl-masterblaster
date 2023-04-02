@@ -53,23 +53,54 @@
 (equalp (aref *notes-array* 87) #S(NOTE :ID "C 8" :OCTAVE 8 :NOTE :C :MIDI-VALUE 108 :FREQ 4186.009 :INDEX 87))
 (equalp (aref *notes-array* 0) #S(NOTE :ID "A 0" :OCTAVE 0 :NOTE :A :MIDI-VALUE 21 :FREQ 27.5 :INDEX 0))
 
-;; (note-freq (aref *notes-array* 0)) ;; 27.5
-;; (note-midi-value (aref *notes-array* 0)) ;; 21
-;; (note-id (aref *notes-array* 0)) ;; "A 0"
-;; (note-octave (aref *notes-array* 0)) ;; 0
+(defparameter *note-symbols-to-note-hash* (make-hash-table))
+
+(dotimes (i 108)
+  (let* ((n (1+ i))
+         (key (format nil "~a~d" (name-of-nth-key n) (octave-of-nth-key n)))
+         (keysym (intern key "KEYWORD") ))
+    ;;(format t "~s  ~s ~%" keysym (aref *notes-array* i))
+    (setf (gethash keysym *note-symbols-to-note-hash*) n))
+  (setf (gethash :off *note-symbols-to-note-hash*) 255)
+  (setf (gethash :non *note-symbols-to-note-hash*) 0))
 
 ;; TODO inline? macro?
 (defun note (i)
   (if (= 0 i) nil
       (aref *notes-array* (1- i))))
 
+;; Macro to convert a symbol, :d9, to its appropriate index
+(defmacro n (note)
+  `(if (keywordp ,note)
+       (gethash ,note *note-symbols-to-note-hash*)
+       (and (assert-valid-note ,note) ,note)))
+
+(defmacro ns (note)
+  `(aref *notes-array* (1- (n ,note))))
+
+(defun assert-valid-note (n)
+  (assert (and (integerp n) (not (or (> n 255) (< n 0) (and (> n 108) (< n 255)))))))
+
+;; (assert-valid-note 255) ;; -> nil
+;; (assert-valid-note 109) ;; -> fails!
+;; (assert-valid-note 'test) ;; -> fails!
+;; (assert-valid-note 1) ;; -> nil
+
 (defun note-string-value (i)
   (cond ((= i 255) +NOTE-OFF-STRING+)
         ((and (> i 0) (<= i 108)) (note-id (note i)))
         (t nil)))
 
-;; (defmacro note (index-or-note-symbol)
-;;   `(if (= 0 ,index-or-note-symbol) nil
-;;       (aref *notes-array* (1- ,index-or-note-symbol))))
+(defun note-integer-to-valid-index-with-coercion (note)
+  (assert (typep note 'integer))
+  (let ((coerced-note note))
+    (cond
+      ((> note +NOTE-OFF-VALUE+) (setf coerced-note +NOTE-NO-VALUE+))
+      ((> note +NOTE-MAX-VALUE+) (setf coerced-note +NOTE-OFF-VALUE+))
+      ((< note +NOTE-NO-VALUE+) (setf coerced-note +NOTE-OFF-VALUE+))
+      ((< note +NOTE-MIN-VALUE+) (setf coerced-note +NOTE-NO-VALUE+)))
+    coerced-note))
 
-(note-freq (note 25))
+(assert (= (note-integer-to-valid-index-with-coercion 256) 0))
+(assert (= (note-integer-to-valid-index-with-coercion -1) 255))
+(assert (= (note-integer-to-valid-index-with-coercion 3) 3))

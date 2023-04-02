@@ -27,14 +27,8 @@
   ;; (unless (or (and (>= note +NOTE-MIN-VALUE+) (<= note +NOTE-MAX-VALUE+))
   ;;             (= note +NOTE-NO-VALUE+) (= note +NOTE-OFF-VALUE+))
   ;;   (error "NOTE should be in the range 1-108, 255 for note off, 0 for no note"))
-  (let ((coerced-note note))
-    (cond
-      ((> note +NOTE-OFF-VALUE+) (setf coerced-note +NOTE-NO-VALUE+))
-      ((> note +NOTE-MAX-VALUE+) (setf coerced-note +NOTE-OFF-VALUE+))
-      ((< note +NOTE-NO-VALUE+) (setf coerced-note +NOTE-OFF-VALUE+))
-      ((< note +NOTE-MIN-VALUE+) (setf coerced-note +NOTE-NO-VALUE+))
-      )
-    (setf (aref (slot-value track 'notes) (mod index (track-length track))) coerced-note)))
+  (setf (aref (slot-value track 'notes) (mod index (track-length track)))
+        (note-integer-to-valid-index-with-coercion note)))
 
 (defun track-get-note (track index)
   "Get the TRACK's note value at INDEX"
