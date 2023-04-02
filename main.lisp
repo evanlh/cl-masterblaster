@@ -6,13 +6,14 @@
 (ql:quickload "portmidi")
 (ql:quickload "series")
 (ql:quickload "bordeaux-threads")
+(ql:quickload "alexandria")
 
-;; configure threads
-(defconstant +MAIN-THREAD+ (bt:current-thread))
 
-;; this doesn't seem to be working... tmpfixing it
+;; Below doesn't work, or works too well & deferring fix it for now....
 (defmacro with-mainthread (form)
   `(progn ,form))
+;; configure threads
+;; (defconstant +MAIN-THREAD+ (bt:current-thread))
 ;; (defmacro with-mainthread (form)
 ;;   `(if (eq (bt:current-thread) +MAIN-THREAD+)
 ;;        (progn ,form)
@@ -172,11 +173,7 @@
         (let ((tex (sdl2:create-texture renderer sdl2-ffi:+sdl-pixeltype-unknown+ sdl2-ffi:+sdl-textureaccess-streaming+ width height)))
           (let ((w (sdl2:texture-width tex))
                 (h (sdl2:texture-height tex)))
-            (format t "Display: Created texture width: ~d height: ~d~%" w h)
-            ;; (print tex)
-            ;; (print w)
-            ;; (print h)
-            ))
+            (format t "Display: Created texture width: ~d height: ~d~%" w h)))
         (setf *window* window)
         (setf *renderer* renderer)))
 
@@ -275,6 +272,7 @@
      (display-draw-line (/ +screen-width+ 2) 0 (/ +screen-width+ 2) +screen-height+)
      )))
 
+;; (launch)
 
 (defun axis-translator (x11 x12 x21 x22)
   (let* ((x (/ (- x21 x22) (- x11 x12)))
@@ -326,11 +324,6 @@
 
 ;; (plot (lambda (x) (sin x)) 0 (* 2 PI) -1 1)
 ;; (plot (lambda (x) (cos x)) 0 (* 2 PI))
-
-;; (setf *window* nil)
-;; (launch)
-
-
 
 (defconstant +track-grid-border-padding+ 2)
 (defconstant +track-grid-border-thickness+ 1)
@@ -389,6 +382,7 @@
                                      (if selectedp row-selected-color fg-color)))))
     (values x1 y1)))
 
+;; Initialize some example tracks at different tpb using euclidean initializer
 (progn
   (defparameter testtrack1 (make-instance 'track :length 4 :ticks-per-bar 4))
   (track-set-euclidean testtrack1 4 52)
@@ -447,7 +441,7 @@
   "Play the selected tracks `loop-count` times at the set BPM"
   (let* ((tpb-per-track (mapcar #'track-ticks-per-bar tracks))
          ;; zip together the tracks and their corresponding ticksperbar
-         (tracks-and-tpb (mapcar #'list tracks tpb-per-track))
+         (tracks-and-tpb (mapcar #'list tracks tpb-per-track (alexandria:iota (length tracks))))
          ;; array of last played note per track
          (lastnotes (make-array (length tracks) :initial-element nil))
          ;; increment by the ratio of each track tick to the LCM
@@ -456,43 +450,95 @@
          (ms (ms-per-tick bpm lcm))
          (ms-rt (* ms +internal-time-units-per-millisecond+))
          (start-time (get-internal-real-time))
-         (nticks 0)
-         (track-index 0))
+         (nticks 0))
     ;; TODO should pause GC here?
-    (format t "~s ~d ~%" tracks-and-tpb loop-count)
     (loop
-      ;; repeat loop-count
       for i from 0 upto (* loop-count lcm)
       while (not +midi-stop-playing-flag+)
       do
-         (setf track-index 0)
+         ;; loop thru each of the tracks
          (dolist (l tracks-and-tpb)
            (let* ((track (first l))
                   (tpb (second l))
+                  (track-index (third l))
                   (tick (* tpb nticks)))
+             ;; if we're at a non-fractional tick for this track, play note if any
              (when (integerp tick)
                ;; TODO this sucks. Can we unify note-struct and note somehow?
                (let ((note (track-get-note track tick))
                      (note-struct (track-get-note-struct track tick)))
+                 ;; this covers offing previous note & also 'note off'=255
                  (when (and (aref lastnotes track-index) (> note 0))
                    (midi-note-off (note-midi-value (aref lastnotes track-index)))
-                   ;; (format t "playing midi off ~s tick ~d ~%" (note-midi-value (aref lastnotes track-index)) tick)
                    (setf (aref lastnotes track-index) nil))
+                 ;; play new note
                  (when note-struct
                    (midi-note-on (note-midi-value note-struct))
-                   ;; (format t "playing midi note ~s tick ~d ~%" (note-midi-value note-struct) tick)
-                   (setf (aref lastnotes track-index) note-struct)))))
-           (incf track-index))
+                   (setf (aref lastnotes track-index) note-struct))))))
          (incf nticks incby)
-          ;; (format t "~d ~d ~%" nticks i)
           ;; spin until we reach the next tick or playback was stopped
          (spin-untilp (lambda ()
                         (or (>= (get-internal-real-time) (+ start-time (* (1+ i) ms-rt)))
                             +midi-stop-playing-flag+))))
     ;; whenever we stop playing (finished loop, stop requested)
-    ;; off all previous notes
+    ;; off all previous notes if any
     (dotimes (i (length lastnotes))
-      (midi-note-off (note-midi-value (aref lastnotes i))))))
+      (when (aref lastnotes i)
+        (midi-note-off (note-midi-value (aref lastnotes i)))))))
+
+
+
+;; ;; TODO p sure it's looping on the TPB instead of the track-length
+;; (defun midi-play-tracks (bpm tracks &optional (loop-count 1))
+;;   "Play the selected tracks `loop-count` times at the set BPM"
+;;   (let* ((tpb-per-track (mapcar #'track-ticks-per-bar tracks))
+;;          ;; zip together the tracks and their corresponding ticksperbar
+;;          (tracks-and-tpb (mapcar #'list tracks tpb-per-track (alexandria:iota (length tracks))))
+;;          ;; array of last played note per track
+;;          (lastnotes (make-array (length tracks) :initial-element nil))
+;;          ;; increment by the ratio of each track tick to the LCM
+;;          (lcm (apply #'compute-track-tick-lcm tracks))
+;;          (incby (/ 1 lcm))
+;;          (maxtracklen (max (mapcar #'track-length tracks)))
+;;          (ms (ms-per-tick bpm lcm))
+;;          (ms-rt (* ms +internal-time-units-per-millisecond+))
+;;          (start-time (get-internal-real-time))
+;;          (nticks 0))
+;;     ;; TODO should pause GC here?
+;;     (loop
+;;       for i from 0 upto (* loop-count lcm)
+;;       while (not +midi-stop-playing-flag+)
+;;       do
+;;          ;; loop thru each of the tracks
+;;          (dolist (l tracks-and-tpb)
+;;            (let* ((track (first l))
+;;                   (tpb (second l))
+;;                   (track-index (third l))
+;;                   (tick (* tpb nticks)))
+;;              ;; if we're at a non-fractional tick for this track, play note if any
+;;              (when (integerp tick)
+;;                ;; TODO this sucks. Can we unify note-struct and note somehow?
+;;                (let ((note (track-get-note track tick))
+;;                      (note-struct (track-get-note-struct track tick)))
+;;                  ;; this covers offing previous note & also 'note off'=255
+;;                  (when (and (aref lastnotes track-index) (> note 0))
+;;                    (midi-note-off (note-midi-value (aref lastnotes track-index)))
+;;                    (setf (aref lastnotes track-index) nil))
+;;                  ;; play new note
+;;                  (when note-struct
+;;                    (midi-note-on (note-midi-value note-struct))
+;;                    (setf (aref lastnotes track-index) note-struct))))))
+;;          (incf nticks incby)
+;;           ;; spin until we reach the next tick or playback was stopped
+;;          (spin-untilp (lambda ()
+;;                         (or (>= (get-internal-real-time) (+ start-time (* (1+ i) ms-rt)))
+;;                             +midi-stop-playing-flag+))))
+;;     ;; whenever we stop playing (finished loop, stop requested)
+;;     ;; off all previous notes if any
+;;     (dotimes (i (length lastnotes))
+;;       (when (aref lastnotes i)
+;;         (midi-note-off (note-midi-value (aref lastnotes i)))))))
+
 
 (defun midi-thread-initialize ()
   (format t "Started MIDI thread~%")
@@ -504,14 +550,16 @@
       (error "No  thread support with this version of CL!"))
     (when (not tracks)
       (error "No tracks supplied"))
+    (when +midi-thread+
+      (bt:destroy-thread +midi-thread+))
     (midi-initialize-stream)
     (setf +midi-stop-playing-flag+ nil)
     (setf +midi-playback-args+ (list bpm tracks loop-count))
     (setf +midi-is-playing+ t)
+    ;; MIDI thread only writes to this, display thread only reads from
+    ;; (setf +midi-tracks-current-tick+ (make-list (length tracks) :initial-element 0))
     ;; (setf +midi-playback-bpm+ bpm)
     ;; (setf +midi-playback-tracks+ tracks)
-    (when +midi-thread+
-      (bt:destroy-thread +midi-thread+))
     (setf +midi-thread+
           (bt:make-thread #'midi-thread-initialize :name "Masterblaster MIDI thread"))))
 
@@ -566,82 +614,147 @@
 ;; Reading track data.
 
 
-;; TODO this is a nice & quick hack but just based on the verbosity of the approach (lambda, lambda, lambda..)
-;; probably ought to convert it to sth CLOS-based
-(display-component
- (lambda ()
-   (let* ((selected-track 0)
-          (row 0)
-          (tracks (list testtrack1 testtrack2 testtrack3 testtrack4)))
-     (list
-      :down
-      (lambda ()
-        (setf row (mod (1+ row) (track-length (nth selected-track tracks))))
-        t)
-      :up
-      (lambda ()
-        (setf row (mod (1- row) (track-length (nth selected-track  tracks))))
-        t)
-      :right
-      (lambda ()
-        (let* ((next-track (mod (1+ selected-track) (length tracks)))
-               (lratio (/ (track-ticks-per-bar (nth next-track tracks)) (track-ticks-per-bar (nth selected-track tracks))))
-               (new-row (min (1- (track-length (nth next-track tracks))) (round (* lratio row)))))
-          (setf selected-track next-track)
-          (setf row new-row)
-          t))
-      :left
-      (lambda ()
-        (let* ((next-track (mod (1- selected-track) (length tracks)))
-               (lratio (/ (track-ticks-per-bar (nth next-track tracks)) (track-ticks-per-bar (nth selected-track tracks))))
-               (new-row (min (1- (track-length (nth next-track tracks))) (round (* lratio row)))))
-          (setf selected-track next-track)
-          (setf row new-row)
-          t))
-      :cancel
-      (lambda ()
-        (let* ((track (nth selected-track tracks))
-               (note (track-get-note track row)))
-          (track-set-note track row 0)
-          t))
-      :play
-      (lambda ()
-        (if +midi-is-playing+
-            (midi-stop-own-thread)
-            (midi-play-tracks-own-thread 120 tracks 10000)))
-      :mod1-right
-      (lambda ()
-        (let* ((track (nth selected-track tracks))
-               (note (track-get-note track row)))
-          (track-set-note track row (1+ note))
-          t))
-      :mod1-left
-      (lambda ()
-        (let* ((track (nth selected-track tracks))
-               (note (track-get-note track row)))
-          (track-set-note track row (1- note))
-          t))
-      :mod1-up
-      (lambda ()
-        (let* ((track (nth selected-track tracks))
-               (note (track-get-note track row)))
-          (track-set-note track row (+ note 12))
-          t))
-      :mod1-down
-      (lambda ()
-        (let* ((track (nth selected-track tracks))
-               (note (track-get-note track row)))
-          (track-set-note track row (- note 12))
-          t))
-      :display
-      (lambda ()
-        (display-clear 0 0 0 255)
-        (multiple-value-bind (innerh innerw outerh outerw) (compute-track-cell-dimensions 3)
-          (let* ((track-heights (compute-tracks-outer-height outerh testtrack1 testtrack2 testtrack3 testtrack4))
-                 (i 0))
-            (dolist (track tracks)
-              (draw-note-track-lane track (* i outerw) 0 (nth i track-heights) outerw
-                                    :row-selected (if (= selected-track i) row nil))
-              (incf i))
-            )))))))
 
+(defun render-tracks (tracks &optional (bpm 120))
+  ;; TODO this is a nice & quick hack but just based on the verbosity of the approach (lambda, lambda, lambda..)
+  ;; probably ought to convert it to sth CLOS-based
+  ;; TODO dispatch on a set of keys? or toggle mod values so you can be in the UP handler and check mod values? (ex: shift modifier always just increases the increment of the thing you'd be doing anyway, UP = go up, UP+shift = go up one bar)
+  (display-component
+   (lambda ()
+     (let* ((selected-track 0)
+            (row 0))
+       (list
+        :down
+        (lambda ()
+          (setf row (mod (1+ row) (track-length (nth selected-track tracks))))
+          t)
+        :up
+        (lambda ()
+          (setf row (mod (1- row) (track-length (nth selected-track  tracks))))
+          t)
+        :right
+        (lambda ()
+          (let* ((next-track (mod (1+ selected-track) (length tracks)))
+                 (lratio (/ (track-ticks-per-bar (nth next-track tracks)) (track-ticks-per-bar (nth selected-track tracks))))
+                 (new-row (min (1- (track-length (nth next-track tracks))) (round (* lratio row)))))
+            (setf selected-track next-track)
+            (setf row new-row)
+            t))
+        :left
+        (lambda ()
+          (let* ((next-track (mod (1- selected-track) (length tracks)))
+                 (lratio (/ (track-ticks-per-bar (nth next-track tracks)) (track-ticks-per-bar (nth selected-track tracks))))
+                 (new-row (min (1- (track-length (nth next-track tracks))) (round (* lratio row)))))
+            (setf selected-track next-track)
+            (setf row new-row)
+            t))
+        :cancel
+        (lambda ()
+          (let* ((track (nth selected-track tracks))
+                 (note (track-get-note track row)))
+            (track-set-note track row 0)
+            t))
+        :play
+        (lambda ()
+          (if +midi-is-playing+
+              (midi-stop-own-thread)
+              (midi-play-tracks-own-thread bpm tracks 10000)))
+        :mod1-right
+        (lambda ()
+          (let* ((track (nth selected-track tracks))
+                 (note (track-get-note track row)))
+            (track-set-note track row (1+ note))
+            t))
+        :mod1-left
+        (lambda ()
+          (let* ((track (nth selected-track tracks))
+                 (note (track-get-note track row)))
+            (track-set-note track row (1- note))
+            t))
+        :mod1-up
+        (lambda ()
+          (let* ((track (nth selected-track tracks))
+                 (note (track-get-note track row)))
+            (format t "note ~d next note ~d~%" note (+ note 12))
+            (track-set-note track row (+ note 12))
+            t))
+        :mod1-down
+        (lambda ()
+          (let* ((track (nth selected-track tracks))
+                 (note (track-get-note track row)))
+            (format t "note ~d next note ~d~%" note (- note 12))
+            (track-set-note track row (- note 12))
+            t))
+        :display
+        (lambda ()
+          (display-clear 0 0 0 255)
+          (multiple-value-bind (innerh innerw outerh outerw) (compute-track-cell-dimensions 3)
+            (let* ((track-heights (apply #'compute-tracks-outer-height outerh tracks))
+                   (i 0))
+              (dolist (track tracks)
+                (draw-note-track-lane track (* i outerw) 0 (nth i track-heights) outerw
+                                      :row-selected (if (= selected-track i) row nil))
+                (incf i))
+              ))))))))
+
+
+
+;; (let ((track1 (make-instance 'track :length 4 :ticks-per-bar 4))
+;;       (track2 (make-instance 'track :length 8 :ticks-per-bar 8))
+;;       (track3 (make-instance 'track :length 6 :ticks-per-bar 6))
+;;       (track4 (make-instance 'track :length 3 :ticks-per-bar 3)))
+
+;;   (track-set-euclidean track1 4 52)
+
+;;   (track-set-euclidean track2 4 255)
+;;   (track-rotate track2 1)
+;;   (track-set-euclidean track2 4 64)
+
+;;   (track-set-euclidean track3 3 59)
+;;   (track-rotate track3 1)
+
+;;   (track-set-euclidean track4 3 28)
+;;   (render-tracks (list track1 track2 track3 track4)))
+
+
+(let ((track1 (make-instance 'track :length 8 :ticks-per-bar 4))
+      (track2 (make-instance 'track :length 16 :ticks-per-bar 8))
+      (track3 (make-instance 'track :length 15 :ticks-per-bar 8))
+      (track4 (make-instance 'track :length 11 :ticks-per-bar 6)))
+
+  (track-set-euclidean track1 2 (n :c2))
+  (track-set-euclidean track2 1 (n :e4))
+  (track-set-note track2 8 (n :g4))
+  (track-set-euclidean track3 1 (n :b4))
+  (track-rotate track3 1)
+  (track-set-euclidean track4 1 (n :d5))
+
+  (render-tracks (list track1 track2 track3 track4)))
+
+
+
+(let ((track1 (make-instance 'track :length 8 :ticks-per-bar 4))
+      (track2 (make-instance 'track :length 16 :ticks-per-bar 8))
+      (track3 (make-instance 'track :length 12 :ticks-per-bar 6))
+      (track4 (make-instance 'track :length 12 :ticks-per-bar 6)))
+  (track-set-euclidean track1 2 (n :c3))
+  (track-set-euclidean track4 3 (n :c2))
+  (track-set-euclidean track2 4 (n :e4))
+  (track-set-euclidean track3 3 (n :d4))
+  (track-rotate track3 2)
+  (render-tracks (list track1 track2 track3 track4)))
+
+
+(let ((track1 (make-instance 'track :length 8 :ticks-per-bar 8))
+      (track2 (make-instance 'track :length 7 :ticks-per-bar 8))
+      (track3 (make-instance 'track :length 6 :ticks-per-bar 8))
+      (track4 (make-instance 'track :length 6 :ticks-per-bar 6)))
+
+
+  (track-set-euclidean track1 1 (n :c2))
+  (track-set-note track1 3 (n :e4))
+  (track-set-euclidean track2 1 (n :e4))
+  (track-set-euclidean track3 1 (n :c4))
+  (track-set-euclidean track4 1 (n :a4))
+  (track-rotate track4 2)
+  (render-tracks (list track1 track2 track3 track4)))
