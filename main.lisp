@@ -51,7 +51,6 @@
     (format t "~s~%" key)
     (when fn (funcall fn))))
 
-;; TODO could maybe be a macro?
 (defun keymap-update (plist)
   (dotimes (i (/ (length plist) 2))
     (let ((k (nth (* i 2) plist))
@@ -251,6 +250,7 @@
     (keymap-update
      (loop for (k v) on component-plist
            append (list k (display-if v displayfn))))
+    (display-clear 0 0 0 255)
     (display displayfn)))
 
 ;;; LAUNCH & PLOT
@@ -595,7 +595,6 @@
 ;;   testtrack4)
 ;;  10)
 
-
 ;; (midi-stop-own-thread)
 ;; (bt:all-threads)
 ;; (bt:destroy-thread (second (bt:all-threads)))
@@ -604,20 +603,13 @@
 ;; (equalp +midi-thread+ (third (bt:all-threads)))
 ;; (setf +midi-thread+ nil)
 
-;; TODO steps for moving midi playback to its own thread
-;; 1. Create thread exclusively for midi playback
-;; 2. Some way to send messages between main thread & midi thread
-;; 3. Spacebar is hit on display, lambda sends msg to midi thread, midi thread plays/stops pattern
-;; 4. EXTRA CREDIT -- midi thread sends info on what track/tick is being played, main thread updates display
-;; Resources being accessed:
-;; Message queue. Just a global list? one for writing one for reading. or?
-;; Reading track data.
-
+;; TODO
+;; MIDI thread sends info on what track/tick is being played, main thread updates display
 
 
 (defun render-tracks (tracks &optional (bpm 120))
-  ;; TODO this is a nice & quick hack but just based on the verbosity of the approach (lambda, lambda, lambda..)
-  ;; probably ought to convert it to sth CLOS-based
+  ;; TODO this is a nice & quick hack but just based on the verbosity of the approach (lambda,etc..)
+  ;; probably ought to convert it to sth CLOS-based?
   ;; TODO dispatch on a set of keys? or toggle mod values so you can be in the UP handler and check mod values? (ex: shift modifier always just increases the increment of the thing you'd be doing anyway, UP = go up, UP+shift = go up one bar)
   (display-component
    (lambda ()
@@ -699,23 +691,7 @@
 
 
 
-;; (let ((track1 (make-instance 'track :length 4 :ticks-per-bar 4))
-;;       (track2 (make-instance 'track :length 8 :ticks-per-bar 8))
-;;       (track3 (make-instance 'track :length 6 :ticks-per-bar 6))
-;;       (track4 (make-instance 'track :length 3 :ticks-per-bar 3)))
-
-;;   (track-set-euclidean track1 4 52)
-
-;;   (track-set-euclidean track2 4 255)
-;;   (track-rotate track2 1)
-;;   (track-set-euclidean track2 4 64)
-
-;;   (track-set-euclidean track3 3 59)
-;;   (track-rotate track3 1)
-
-;;   (track-set-euclidean track4 3 28)
-;;   (render-tracks (list track1 track2 track3 track4)))
-
+;; BEWARE!!! PLAYING WITH SOME MUSIC HERE
 
 (let ((track1 (make-instance 'track :length 8 :ticks-per-bar 4))
       (track2 (make-instance 'track :length 16 :ticks-per-bar 8))
@@ -732,11 +708,11 @@
   (render-tracks (list track1 track2 track3 track4)))
 
 
-
 (let ((track1 (make-instance 'track :length 8 :ticks-per-bar 4))
       (track2 (make-instance 'track :length 16 :ticks-per-bar 8))
       (track3 (make-instance 'track :length 12 :ticks-per-bar 6))
       (track4 (make-instance 'track :length 12 :ticks-per-bar 6)))
+
   (track-set-euclidean track1 2 (n :c3))
   (track-set-euclidean track4 3 (n :c2))
   (track-set-euclidean track2 4 (n :e4))
@@ -750,7 +726,6 @@
       (track3 (make-instance 'track :length 6 :ticks-per-bar 8))
       (track4 (make-instance 'track :length 6 :ticks-per-bar 6)))
 
-
   (track-set-euclidean track1 1 (n :c2))
   (track-set-note track1 3 (n :e4))
   (track-set-euclidean track2 1 (n :e4))
@@ -758,3 +733,22 @@
   (track-set-euclidean track4 1 (n :a4))
   (track-rotate track4 2)
   (render-tracks (list track1 track2 track3 track4)))
+
+(let ((track1 (make-instance 'track :length 16 :ticks-per-bar 8))
+      (track2 (make-instance 'track :length 16 :ticks-per-bar 8))
+      (track3 (make-instance 'track :length 16 :ticks-per-bar 8))
+      (track4 (make-instance 'track :length 15 :ticks-per-bar 8))
+      (track5 (make-instance 'track :length 14 :ticks-per-bar 8))
+      (track6 (make-instance 'track :length 2 :ticks-per-bar 1)))
+
+  (track-set-euclidean track1 11 (n :c3))
+  (track-set-euclidean track2 2 (n :d#3))
+  (track-set-euclidean track3 2 (n :g3))
+
+  (track-set-euclidean track4 1 (n :d5))
+  (track-set-euclidean track5 2 (n :a#4))
+
+  (track-set-note track6 0 (n :c2))
+  (track-set-note track6 1 255)
+
+  (render-tracks (list track1 track2 track3 track4 track5 track6) 80))

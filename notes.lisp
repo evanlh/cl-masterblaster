@@ -69,13 +69,14 @@
   (if (= 0 i) nil
       (aref *notes-array* (1- i))))
 
-;; Macro to convert a symbol, :d9, to its appropriate index
 (defmacro n (note)
+  "Convert a keyword (eg, :d9), to its appropriate note index"
   `(if (keywordp ,note)
        (gethash ,note *note-symbols-to-note-hash*)
        (and (assert-valid-note ,note) ,note)))
 
 (defmacro ns (note)
+  "Return the note structure associated with the provided (keyword or integer) note"
   `(aref *notes-array* (1- (n ,note))))
 
 (defun assert-valid-note (n)
