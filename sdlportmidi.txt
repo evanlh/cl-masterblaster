@@ -1,0 +1,213 @@
+THREAD CAPTURE INSIDE OF DEADLOCK----------
+
+
+(lldb) bt all
+* thread #1, queue = 'com.apple.main-thread', stop reason = signal SIGSTOP
+  * frame #0: 0x00007fff6eefc68e libsystem_kernel.dylib`__read_nocancel + 10
+    frame #1: 0x00007fff6ee492cb libsystem_c.dylib`_sread + 16
+    frame #2: 0x00007fff6ee48946 libsystem_c.dylib`__srefill1 + 24
+    frame #3: 0x00007fff6ee48a68 libsystem_c.dylib`__srget + 14
+    frame #4: 0x00007fff6ee4225d libsystem_c.dylib`fgetc + 52
+    frame #5: 0x000000000002ad32 dx86cl64`readc + 35
+    frame #6: 0x000000000002bb2e dx86cl64`lisp_Debugger + 475
+    frame #7: 0x0000000000027a80 dx86cl64`signal_handler + 286
+    frame #8: 0x000000000002f1d7 dx86cl64`ensure_safe_for_string_operations + 2
+  thread #2
+    frame #0: 0x00007fff6eefadea libsystem_kernel.dylib`mach_msg_trap + 10
+    frame #1: 0x00007fff6eefb160 libsystem_kernel.dylib`mach_msg + 60
+    frame #2: 0x00007fff6ef00ccc libsystem_kernel.dylib`mach_msg_server + 298
+    frame #3: 0x0000000000028aee dx86cl64`exception_handler_proc + 49
+    frame #4: 0x00007fff6efbe109 libsystem_pthread.dylib`_pthread_start + 148
+    frame #5: 0x00007fff6efb9b8b libsystem_pthread.dylib`thread_start + 15
+  thread #3
+    frame #0: 0x00007fff6eefae26 libsystem_kernel.dylib`semaphore_wait_trap + 10
+    frame #1: 0x0000000000029789 dx86cl64`suspend_resume_handler + 185
+    frame #2: 0x00007fff6efb25fd libsystem_platform.dylib`_sigtramp + 29
+    frame #3: 0x00007fff6eefb80d libsystem_kernel.dylib`read + 9
+    frame #4: 0x000000000001bd43 dx86cl64`SPffcall + 99
+  thread #4
+    frame #0: 0x00007fff6eefae26 libsystem_kernel.dylib`semaphore_wait_trap + 10
+    frame #1: 0x0000000000029789 dx86cl64`suspend_resume_handler + 185
+    frame #2: 0x00007fff6efb25fd libsystem_platform.dylib`_sigtramp + 29
+    frame #3: 0x00007fff6eefae3f libsystem_kernel.dylib`semaphore_timedwait_trap + 11
+    frame #4: 0x000000000002963c dx86cl64`wait_on_semaphore + 55
+    frame #5: 0x000000000001bd43 dx86cl64`SPffcall + 99
+  thread #5
+    frame #0: 0x00007fff6eefae26 libsystem_kernel.dylib`semaphore_wait_trap + 10
+    frame #1: 0x0000000000029789 dx86cl64`suspend_resume_handler + 185
+    frame #2: 0x00007fff6efb25fd libsystem_platform.dylib`_sigtramp + 29
+    frame #3: 0x00007fff6eefae3f libsystem_kernel.dylib`semaphore_timedwait_trap + 11
+    frame #4: 0x000000000002963c dx86cl64`wait_on_semaphore + 55
+    frame #5: 0x000000000001bd43 dx86cl64`SPffcall + 99
+  thread #6
+    frame #0: 0x00007fff6eefae26 libsystem_kernel.dylib`semaphore_wait_trap + 10
+    frame #1: 0x0000000000029789 dx86cl64`suspend_resume_handler + 185
+    frame #2: 0x00007fff6efb25fd libsystem_platform.dylib`_sigtramp + 29
+    frame #3: 0x00007fff6eefb80d libsystem_kernel.dylib`read + 9
+    frame #4: 0x000000000001bd43 dx86cl64`SPffcall + 99
+  thread #7
+    frame #0: 0x00007fff6eefae26 libsystem_kernel.dylib`semaphore_wait_trap + 10
+    frame #1: 0x0000000000029789 dx86cl64`suspend_resume_handler + 185
+    frame #2: 0x00007fff6efb25fd libsystem_platform.dylib`_sigtramp + 29
+    frame #3: 0x00007fff6eefae3f libsystem_kernel.dylib`semaphore_timedwait_trap + 11
+    frame #4: 0x000000000002963c dx86cl64`wait_on_semaphore + 55
+    frame #5: 0x000000000001bd43 dx86cl64`SPffcall + 99
+  thread #8
+    frame #0: 0x00007fff6eefae26 libsystem_kernel.dylib`semaphore_wait_trap + 10
+    frame #1: 0x0000000000029789 dx86cl64`suspend_resume_handler + 185
+    frame #2: 0x00007fff6efb25fd libsystem_platform.dylib`_sigtramp + 29
+    frame #3: 0x00007fff6eefd747 libsystem_kernel.dylib`__semwait_signal + 11
+    frame #4: 0x00007fff6ee80eea libsystem_c.dylib`nanosleep + 196
+    frame #5: 0x000000000001bd43 dx86cl64`SPffcall + 99
+    frame #6: 0x0000000004711e40
+    frame #7: 0x0000000004711e40
+  thread #9
+    frame #0: 0x00007fff6eefae26 libsystem_kernel.dylib`semaphore_wait_trap + 10
+    frame #1: 0x0000000000029789 dx86cl64`suspend_resume_handler + 185
+    frame #2: 0x00007fff6efb25fd libsystem_platform.dylib`_sigtramp + 29
+    frame #3: 0x00007fff6eefae3f libsystem_kernel.dylib`semaphore_timedwait_trap + 11
+    frame #4: 0x000000000002963c dx86cl64`wait_on_semaphore + 55
+    frame #5: 0x000000000001bd43 dx86cl64`SPffcall + 99
+  thread #10
+    frame #0: 0x00007fff6eefae26 libsystem_kernel.dylib`semaphore_wait_trap + 10
+    frame #1: 0x0000000000029789 dx86cl64`suspend_resume_handler + 185
+    frame #2: 0x00007fff6efb25fd libsystem_platform.dylib`_sigtramp + 29
+    frame #3: 0x00007fff6eefae3f libsystem_kernel.dylib`semaphore_timedwait_trap + 11
+    frame #4: 0x000000000002963c dx86cl64`wait_on_semaphore + 55
+    frame #5: 0x000000000001bd43 dx86cl64`SPffcall + 99
+  thread #11
+    frame #0: 0x00007fff6eefadea libsystem_kernel.dylib`mach_msg_trap + 10
+    frame #1: 0x00007fff6eefb160 libsystem_kernel.dylib`mach_msg + 60
+    frame #2: 0x00007fff35f47495 CoreMIDI`XServerMachPort::ReceiveMessage(int&, void*, int&) + 95
+    frame #3: 0x00007fff35f64fee CoreMIDI`MIDIProcess::RunMIDIInThread() + 104
+    frame #4: 0x00007fff35f63cde CoreMIDI`XThread::RunHelper(void*) + 10
+    frame #5: 0x00007fff35f47191 CoreMIDI`CAPThread::Entry(CAPThread*) + 77
+    frame #6: 0x00007fff6efbe109 libsystem_pthread.dylib`_pthread_start + 148
+    frame #7: 0x00007fff6efb9b8b libsystem_pthread.dylib`thread_start + 15
+  thread #12, name = 'SDLTimer'
+    frame #0: 0x00007fff6eefd872 libsystem_kernel.dylib`__psynch_cvwait + 10
+    frame #1: 0x00007fff6efbe425 libsystem_pthread.dylib`_pthread_cond_wait + 698
+    frame #2: 0x00000000058d3961 libSDL2-2.0.0.dylib`SDL_CondWaitTimeout_REAL + 144
+    frame #3: 0x00000000058d3595 libSDL2-2.0.0.dylib`SDL_SemWaitTimeout_REAL + 82
+    frame #4: 0x0000000005864709 libSDL2-2.0.0.dylib`SDL_TimerThread + 457
+    frame #5: 0x000000000586422d libSDL2-2.0.0.dylib`SDL_RunThread + 44
+    frame #6: 0x00000000058d3204 libSDL2-2.0.0.dylib`RunThread + 9
+    frame #7: 0x00007fff6efbe109 libsystem_pthread.dylib`_pthread_start + 148
+    frame #8: 0x00007fff6efb9b8b libsystem_pthread.dylib`thread_start + 15
+  thread #13, name = 'AMCP Logging Spool'
+    frame #0: 0x00007fff6eefae26 libsystem_kernel.dylib`semaphore_wait_trap + 10
+    frame #1: 0x00007fff6898bb16 caulk`caulk::mach::semaphore::wait() + 16
+    frame #2: 0x00007fff6898b9b2 caulk`caulk::semaphore::timed_wait(double) + 106
+    frame #3: 0x00007fff6898b7c4 caulk`caulk::concurrent::details::worker_thread::run() + 30
+    frame #4: 0x00007fff6898b1e4 caulk`void* caulk::thread_proxy<std::__1::tuple<caulk::thread::attributes, void (caulk::concurrent::details::worker_thread::*)(), std::__1::tuple<caulk::concurrent::details::worker_thread*> > >(void*) + 45
+    frame #5: 0x00007fff6efbe109 libsystem_pthread.dylib`_pthread_start + 148
+    frame #6: 0x00007fff6efb9b8b libsystem_pthread.dylib`thread_start + 15
+  thread #14
+    frame #0: 0x00007fff6eefae26 libsystem_kernel.dylib`semaphore_wait_trap + 10
+    frame #1: 0x00007fff6898bb16 caulk`caulk::mach::semaphore::wait() + 16
+    frame #2: 0x00007fff6898b9b2 caulk`caulk::semaphore::timed_wait(double) + 106
+    frame #3: 0x00007fff6898b7c4 caulk`caulk::concurrent::details::worker_thread::run() + 30
+    frame #4: 0x00007fff6898b1e4 caulk`void* caulk::thread_proxy<std::__1::tuple<caulk::thread::attributes, void (caulk::concurrent::details::worker_thread::*)(), std::__1::tuple<caulk::concurrent::details::worker_thread*> > >(void*) + 45
+    frame #5: 0x00007fff6efbe109 libsystem_pthread.dylib`_pthread_start + 148
+    frame #6: 0x00007fff6efb9b8b libsystem_pthread.dylib`thread_start + 15
+  thread #15
+    frame #0: 0x00007fff6eefc4be libsystem_kernel.dylib`__workq_kernreturn + 10
+    frame #1: 0x00007fff6efbaaa1 libsystem_pthread.dylib`_pthread_wqthread + 390
+    frame #2: 0x00007fff6efb9b77 libsystem_pthread.dylib`start_wqthread + 15
+(lldb)
+
+
+
+THREAD CAPTURE OUTSIDE OF DEADLOCK----
+
+(lldb) bt all
+* thread #1, queue = 'com.apple.main-thread', stop reason = signal SIGSTOP
+  * frame #0: 0x00007fff6eefd746 libsystem_kernel.dylib`__semwait_signal + 10
+    frame #1: 0x00007fff6ee80eea libsystem_c.dylib`nanosleep + 196
+    frame #2: 0x000000000001bd43 dx86cl64`SPffcall + 99
+    frame #3: 0x0000000000647c20
+    frame #4: 0x0000000000647c20
+  thread #2
+    frame #0: 0x00007fff6eefadea libsystem_kernel.dylib`mach_msg_trap + 10
+    frame #1: 0x00007fff6eefb160 libsystem_kernel.dylib`mach_msg + 60
+    frame #2: 0x00007fff6ef00ccc libsystem_kernel.dylib`mach_msg_server + 298
+    frame #3: 0x0000000000028aee dx86cl64`exception_handler_proc + 49
+    frame #4: 0x00007fff6efbe109 libsystem_pthread.dylib`_pthread_start + 148
+    frame #5: 0x00007fff6efb9b8b libsystem_pthread.dylib`thread_start + 15
+  thread #3
+    frame #0: 0x00007fff6eefb80e libsystem_kernel.dylib`read + 10
+  thread #4
+    frame #0: 0x00007fff6eefae3e libsystem_kernel.dylib`semaphore_timedwait_trap + 10
+    frame #1: 0x000000000002963c dx86cl64`wait_on_semaphore + 55
+    frame #2: 0x000000000001bd43 dx86cl64`SPffcall + 99
+  thread #5
+    frame #0: 0x00007fff6eefae3e libsystem_kernel.dylib`semaphore_timedwait_trap + 10
+    frame #1: 0x000000000002963c dx86cl64`wait_on_semaphore + 55
+    frame #2: 0x000000000001bd43 dx86cl64`SPffcall + 99
+  thread #6
+    frame #0: 0x00007fff6eefb80e libsystem_kernel.dylib`read + 10
+  thread #7
+    frame #0: 0x00007fff6eefae3e libsystem_kernel.dylib`semaphore_timedwait_trap + 10
+    frame #1: 0x000000000002963c dx86cl64`wait_on_semaphore + 55
+    frame #2: 0x000000000001bd43 dx86cl64`SPffcall + 99
+  thread #8
+    frame #0: 0x00007fff6eefae3e libsystem_kernel.dylib`semaphore_timedwait_trap + 10
+    frame #1: 0x000000000002963c dx86cl64`wait_on_semaphore + 55
+    frame #2: 0x000000000001bd43 dx86cl64`SPffcall + 99
+  thread #9
+    frame #0: 0x00007fff6eefae3e libsystem_kernel.dylib`semaphore_timedwait_trap + 10
+    frame #1: 0x000000000002963c dx86cl64`wait_on_semaphore + 55
+    frame #2: 0x000000000001bd43 dx86cl64`SPffcall + 99
+  thread #10
+    frame #0: 0x00007fff6eefae3e libsystem_kernel.dylib`semaphore_timedwait_trap + 10
+    frame #1: 0x000000000002963c dx86cl64`wait_on_semaphore + 55
+    frame #2: 0x000000000001bd43 dx86cl64`SPffcall + 99
+  thread #11, name = 'SDLTimer'
+    frame #0: 0x00007fff6eefd872 libsystem_kernel.dylib`__psynch_cvwait + 10
+    frame #1: 0x00007fff6efbe425 libsystem_pthread.dylib`_pthread_cond_wait + 698
+    frame #2: 0x00000000259d3961 libSDL2-2.0.0.dylib`SDL_CondWaitTimeout_REAL + 144
+    frame #3: 0x00000000259d3595 libSDL2-2.0.0.dylib`SDL_SemWaitTimeout_REAL + 82
+    frame #4: 0x0000000025964709 libSDL2-2.0.0.dylib`SDL_TimerThread + 457
+    frame #5: 0x000000002596422d libSDL2-2.0.0.dylib`SDL_RunThread + 44
+    frame #6: 0x00000000259d3204 libSDL2-2.0.0.dylib`RunThread + 9
+    frame #7: 0x00007fff6efbe109 libsystem_pthread.dylib`_pthread_start + 148
+    frame #8: 0x00007fff6efb9b8b libsystem_pthread.dylib`thread_start + 15
+  thread #12, name = 'AMCP Logging Spool'
+    frame #0: 0x00007fff6eefae26 libsystem_kernel.dylib`semaphore_wait_trap + 10
+    frame #1: 0x00007fff6898bb16 caulk`caulk::mach::semaphore::wait() + 16
+    frame #2: 0x00007fff6898b9b2 caulk`caulk::semaphore::timed_wait(double) + 106
+    frame #3: 0x00007fff6898b7c4 caulk`caulk::concurrent::details::worker_thread::run() + 30
+    frame #4: 0x00007fff6898b1e4 caulk`void* caulk::thread_proxy<std::__1::tuple<caulk::thread::attributes, void (caulk::concurrent::details::worker_thread::*)(), std::__1::tuple<caulk::concurrent::details::worker_thread*> > >(void*) + 45
+    frame #5: 0x00007fff6efbe109 libsystem_pthread.dylib`_pthread_start + 148
+    frame #6: 0x00007fff6efb9b8b libsystem_pthread.dylib`thread_start + 15
+  thread #13
+    frame #0: 0x00007fff6eefae26 libsystem_kernel.dylib`semaphore_wait_trap + 10
+    frame #1: 0x00007fff6898bb16 caulk`caulk::mach::semaphore::wait() + 16
+    frame #2: 0x00007fff6898b9b2 caulk`caulk::semaphore::timed_wait(double) + 106
+    frame #3: 0x00007fff6898b7c4 caulk`caulk::concurrent::details::worker_thread::run() + 30
+    frame #4: 0x00007fff6898b1e4 caulk`void* caulk::thread_proxy<std::__1::tuple<caulk::thread::attributes, void (caulk::concurrent::details::worker_thread::*)(), std::__1::tuple<caulk::concurrent::details::worker_thread*> > >(void*) + 45
+    frame #5: 0x00007fff6efbe109 libsystem_pthread.dylib`_pthread_start + 148
+    frame #6: 0x00007fff6efb9b8b libsystem_pthread.dylib`thread_start + 15
+  thread #14
+    frame #0: 0x00007fff6eefc4be libsystem_kernel.dylib`__workq_kernreturn + 10
+    frame #1: 0x00007fff6efbaaa1 libsystem_pthread.dylib`_pthread_wqthread + 390
+    frame #2: 0x00007fff6efb9b77 libsystem_pthread.dylib`start_wqthread + 15
+(lldb)
+
+
+NOTES ON THE DIFFERENCE:
+
+- No thread with CoreMIDI exists, & it's not in a mach_msg_trap ofc
+- Backtrace in SDLTimer thread looks the same (in a __psynch_cvwait)
+- Main thread (#1, com.apple.main-thread) is in a __read_nocancel callstack in the lisp Debugger. Maybe the debugger is just getting halted but not calling back to SLIME? Suspicious stack here:
+
+    frame #0: 0x00007fff6eefc68e libsystem_kernel.dylib`__read_nocancel + 10
+    frame #1: 0x00007fff6ee492cb libsystem_c.dylib`_sread + 16
+    frame #2: 0x00007fff6ee48946 libsystem_c.dylib`__srefill1 + 24
+    frame #3: 0x00007fff6ee48a68 libsystem_c.dylib`__srget + 14
+    frame #4: 0x00007fff6ee4225d libsystem_c.dylib`fgetc + 52
+    frame #5: 0x000000000002ad32 dx86cl64`readc + 35
+    frame #6: 0x000000000002bb2e dx86cl64`lisp_Debugger + 475
+
+- Thread #3 differs, WORKING is in a read, BROKEN is in a semaphore_wait_trap
+- Threads #4 & #5 differ slightly, WORKING is in semaphore_timedwait_trap, BROKEN is further along in semaphore_wait_trap but has semaphore_timedwait_trap in the stack
