@@ -1,0 +1,2 @@
+(defpackage #:masterblaster
+  (:use #:cl))

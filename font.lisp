@@ -1,3 +1,5 @@
+(in-package #:masterblaster)
+
 (defvar *bit-map* #(#*0000
                     #*0001
                     #*0010

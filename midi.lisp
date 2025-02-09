@@ -1,3 +1,5 @@
+(in-package #:masterblaster)
+
 (defparameter *default-midi-out* nil)
 (defparameter *default-midi-in* nil)
 (defparameter *stream* nil)

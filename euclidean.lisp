@@ -1,4 +1,6 @@
-(load "arrays.lisp")
+(in-package #:masterblaster)
+
+;; (load "arrays.lisp")
 
 ;; more or less copied from https://github.com/brianhouse/bjorklund/blob/master/__init__.py
 (defun bjorklund (pulses steps)

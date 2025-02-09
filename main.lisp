@@ -1,6 +1,8 @@
 (defpackage #:masterblaster
   (:use #:cl))
 
+(in-package #:masterblaster)
+
 (ql:quickload "sdl2")
 (ql:quickload "cl-portaudio")
 (ql:quickload "portmidi")
@@ -20,9 +22,9 @@
 ;;        (error "This operation should only be executed on the main thread")))
 
 
-(load "font.lisp")
-(load "sound.lisp")
-(load "midi.lisp")
+;; (load "font.lisp")
+;; (load "sound.lisp")
+;; (load "midi.lisp")
 
 (defconstant +SCREEN-WIDTH+ 320)
 (defconstant +SCREEN-HEIGHT+ 240)

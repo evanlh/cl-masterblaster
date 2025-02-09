@@ -1,3 +1,5 @@
+(in-package #:masterblaster)
+
 (defconstant +NOTE-NAMES+ (list :A :A# :B :C :C# :D :D# :E :F :F# :G :G#))
 (defconstant +NOTE-MAX-VALUE+ 108)
 (defconstant +NOTE-MIN-VALUE+ 1)

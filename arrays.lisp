@@ -1,3 +1,5 @@
+(in-package #:masterblaster)
+
 (defun array-rotate-l (arr)
   "Destructively rotate array values left 1 position"
   (when (= 0 (length arr))

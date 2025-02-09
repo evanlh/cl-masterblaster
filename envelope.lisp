@@ -1,3 +1,5 @@
+(in-package #:masterblaster)
+
 (defstruct point
   (x 0 :type single-float)
   (y 0 :type single-float))

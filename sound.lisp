@@ -1,5 +1,7 @@
+(in-package #:masterblaster)
+
 ;; (ql:quickload "cl-portaudio")
-(load "track.lisp")
+;; (load "track.lisp")
 ;; (use-package :portaudio)
 
 (defun log-stream-parameters (p)

@@ -1,6 +1,8 @@
-(load "arrays.lisp")
-(load "euclidean.lisp")
-(load "notes.lisp")
+(in-package #:masterblaster)
+
+;; (load "arrays.lisp")
+;; (load "euclidean.lisp")
+;; (load "notes.lisp")
 
 (defclass track ()
   ((length :initarg :length
