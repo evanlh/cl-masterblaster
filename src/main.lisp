@@ -1,14 +1,11 @@
-(defpackage #:masterblaster
-  (:use #:cl))
-
 (in-package #:masterblaster)
 
-(ql:quickload "sdl2")
-(ql:quickload "cl-portaudio")
-(ql:quickload "portmidi")
-(ql:quickload "series")
-(ql:quickload "bordeaux-threads")
-(ql:quickload "alexandria")
+;; (ql:quickload "sdl2")
+;; (ql:quickload "cl-portaudio")
+;; (ql:quickload "portmidi")
+;; (ql:quickload "series")
+;; (ql:quickload "bordeaux-threads")
+;; (ql:quickload "alexandria")
 
 
 ;; Below doesn't work, or works too well & deferring fix it for now....
@@ -754,3 +751,19 @@
   (track-set-note track6 1 255)
 
   (render-tracks (list track1 track2 track3 track4 track5 track6) 80))
+
+
+(defun init-track ()
+  (let ((track1 (make-instance 'track :length 8 :ticks-per-bar 4))
+        (track2 (make-instance 'track :length 16 :ticks-per-bar 8))
+        (track3 (make-instance 'track :length 15 :ticks-per-bar 8))
+        (track4 (make-instance 'track :length 11 :ticks-per-bar 6)))
+
+    (track-set-euclidean track1 2 (n :c2))
+    (track-set-euclidean track2 1 (n :e4))
+    (track-set-note track2 8 (n :g4))
+    (track-set-euclidean track3 1 (n :b4))
+    (track-rotate track3 1)
+    (track-set-euclidean track4 1 (n :d5))
+
+    (render-tracks (list track1 track2 track3 track4))))
